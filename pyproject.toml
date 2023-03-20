@@ -1,0 +1,18 @@
+[project]
+name = "MouseFlow"
+version = "0.0.1"
+authors = [
+  { name="Oliver Barnstedt", email="o.barnstedt@gmail.com" },
+]
+description = "A Python toolbox to quantify facial and bodily movement in headfixed mice."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: LGPL-3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/obarnstedt/mouseflow"
+"Bug Tracker" = "https://github.com/obarnstedt/mouseflow/issues"
