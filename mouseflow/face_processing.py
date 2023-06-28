@@ -32,7 +32,7 @@ def pupilextraction(dlc_face, pupil_conf_thresh=.99, pupil_smooth_window=75, pup
     print("Fitting circle to pupil...")
     for i in tqdm(range(len(pupil_labels_xy))):
         pupilpoints = np.float32(pupil_labels_xy_confident[i].reshape(6, 2))  # 2D points from DLC MouseFace
-        pupil_circle[i, :] = np.asarray(cv2.minEnclosingCircle(pupilpoints))
+        pupil_circle[i, :] = cv2.minEnclosingCircle(pupilpoints)
 
     pupil_centre = np.asarray(tuple(pupil_circle[:, 0]), dtype=np.float32)
     pupil_x_raw = pd.Series(pupil_centre[:, 0])
@@ -94,7 +94,7 @@ def eyeblink(dlc_face, eyelid_conf_thresh=.999, eyelid_smooth_window=25, eyelid_
 
 
 def faceregions(dlc_face, facevid, faceregion_conf_thresh,
-              faceregion_size_whiskers, faceregion_size_nose, faceregion_size_mouth, faceregion_size_cheek):
+              faceregion_size_whiskers, faceregion_size_nose, faceregion_size_mouth, faceregion_size_cheek, dlc_file):
     # checking on video
     facemp4 = cv2.VideoCapture(facevid)
     firstframe = np.array(facemp4.read()[1][:, :, 0], dtype = np.uint8)
@@ -102,8 +102,15 @@ def faceregions(dlc_face, facevid, faceregion_conf_thresh,
     plt.imshow(firstframe, cmap='gray')
 
     # create empty canvas
-    canvas = np.zeros([582, 782])
+    canvas = np.zeros(firstframe.shape)
     face_anchor = pd.DataFrame(index=['x', 'y'], columns=['nosetip', 'forehead', 'mouthtip', 'chin', 'tearduct', 'eyelid_bottom'])
+
+    # scaling of distances
+    scale_width = firstframe.shape[1] / 782
+    scale_height = firstframe.shape[0] / 582
+    scaling = np.mean([scale_width, scale_height])
+    faceregion_size_whiskers, faceregion_size_nose, faceregion_size_mouth, faceregion_size_cheek = faceregion_size_whiskers*scaling, \
+        faceregion_size_nose*scaling, faceregion_size_mouth*scaling, faceregion_size_cheek*scaling
 
     # nosetip
     nosetip = pd.DataFrame(np.array(dlc_face.values[:, [0, 1]]) * (dlc_face.values[:, [2, 2]] > faceregion_conf_thresh), columns=['x', 'y'])
@@ -170,15 +177,15 @@ def faceregions(dlc_face, facevid, faceregion_conf_thresh,
     if any([np.isnan(t) for t in whiskercentre]):
         whiskermask = np.nan
     else:
-        whiskercentre = tuple(np.round(whiskercentre).astype(int) + [-10, 70])
+        whiskercentre = tuple(np.round(whiskercentre).astype(int) + [int(s*scaling) for s in [-10, 70]])
         whiskers = cv2.circle(firstframe, whiskercentre, int(100*faceregion_size_whiskers), color=(255, 0, 0), thickness=5)
         whiskermask = cv2.circle(canvas.copy(), whiskercentre, int(100*faceregion_size_whiskers), color=(1, 0, 0), thickness=-1).astype(bool)
         plt.imshow(whiskers, cmap='gray')
 
     # nose inference
     if not pd.isna(face_anchor.nosetip)[0]:
-        nosecentre = tuple(np.round(face_anchor.nosetip).astype(int) + [50, 0])
-        nose = cv2.ellipse(firstframe, nosecentre, (int(70*faceregion_size_nose), int(50*faceregion_size_nose)), -60.0, 0.0, 360.0, (255, 0, 0), 5)
+        nosecentre = tuple(np.round(face_anchor.nosetip).astype(int) + [int(s*scaling) for s in [50, 0]])
+        nose = cv2.ellipse(firstframe, nosecentre, (int(70*faceregion_size_nose*scaling), int(50*faceregion_size_nose)), -60.0, 0.0, 360.0, (255, 0, 0), 5)
         nosemask = cv2.ellipse(canvas.copy(), nosecentre, (int(70*faceregion_size_nose), int(50*faceregion_size_nose)), -60.0, 0.0, 360.0, (1, 0, 0), -1).astype(bool)
         plt.imshow(nose, cmap='gray')
     else:
@@ -204,7 +211,8 @@ def faceregions(dlc_face, facevid, faceregion_conf_thresh,
         plt.imshow(cheek, cmap='gray')
 
     masks = [nosemask, whiskermask, mouthmask, cheekmask]
-    # plt.savefig(os.path.join(params['paths']['Results_Cam_Dir'], '') + "face_regions.png")
+    if dlc_file:
+        plt.savefig(dlc_file[:-4] + "face_regions.png")
     plt.close('all')
 
     return masks, face_anchor
@@ -230,8 +238,8 @@ def facemotion(videopath, masks, videoslice=[], total=False):
     else:
         gpu_masks = []
         maskpx = []
+        masks = [m.astype('float32') for m in masks]
         for m in range(len(masks)):
-            masks[m] = masks[m].astype('float32')
             gpu_mask = cv2.cuda_GpuMat()
             gpu_mask.upload(masks[m])
             gpu_masks.append(gpu_mask)
