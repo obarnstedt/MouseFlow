@@ -2,7 +2,7 @@
 
 ## Description
 A Python toolbox to quantify facial and bodily movement in headfixed mice.
-![Sample image](img/103_behaviour.mp4)
+![Sample image](img/Screenshot.png)
 
 
 ## Installation
