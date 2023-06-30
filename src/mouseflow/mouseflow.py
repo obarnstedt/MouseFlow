@@ -2,20 +2,23 @@
 # -*- coding: utf-8 -*-
 
 import matplotlib
+
 matplotlib.use('TKAgg')
-import matplotlib.pyplot as plt
-import os
 import glob
-import pandas as pd
-import mouseflow.face_processing as face_processing
-import mouseflow.body_processing as body_processing
-from mouseflow.utils.generic import smooth
-from mouseflow.utils.preprocess_video import flip_vid
-from mouseflow.utils import motion_processing
-import h5py
-import numpy as np
+import os
+
 # import gdown
 import cv2
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+import mouseflow.body_processing as body_processing
+import mouseflow.face_processing as face_processing
+from mouseflow.utils import motion_processing
+from mouseflow.utils.generic import smooth
+from mouseflow.utils.preprocess_video import flip_vid
 
 plt.interactive(False)
 
@@ -257,6 +260,7 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
     # of_type sets the optical flow algorithm
 
     import tensorflow as tf
+
     #  To evade cuDNN error message:
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -340,8 +344,8 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
             #  FACE DEEPGRAPHPOSE / DEEPLABCUT
             print("Applying ", dlc_faceyaml, " on FACE video: ", facefile)
             if dgp:
-                from deepgraphpose.models.fitdgp_util import get_snapshot_path
                 from deepgraphpose.models.eval import estimate_pose
+                from deepgraphpose.models.fitdgp_util import get_snapshot_path
                 snapshot_path, _ = get_snapshot_path('snapsho-step2-final--0', os.path.dirname(dlc_faceyaml), shuffle=1)
                 estimate_pose(proj_cfg_file=dlc_faceyaml,
                             dgp_model_file=str(snapshot_path),

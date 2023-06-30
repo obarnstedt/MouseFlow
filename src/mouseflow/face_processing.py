@@ -6,19 +6,17 @@ Created on Wed May  8 14:31:51 2019
 @author: Oliver Barnstedt
 """
 
-
-import os.path
 import glob
-import pandas as pd
-from tqdm import tqdm
-import cv2
-from matplotlib import pyplot as plt
 import math
-import numpy as np
-from scipy.stats.mstats import zscore
-from scipy import signal, optimize
-from mouseflow.utils.generic import smooth
+import os.path
 
+import cv2
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+from tqdm import tqdm
+
+from mouseflow.utils.generic import smooth
 
 plt.interactive(False)
 
