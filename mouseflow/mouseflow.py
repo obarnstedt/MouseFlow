@@ -8,6 +8,7 @@ import os
 import glob
 import pandas as pd
 import mouseflow.face_processing as face_processing
+import mouseflow.body_processing as body_processing
 from mouseflow.utils.generic import smooth
 from mouseflow.utils.preprocess_video import flip_vid
 from mouseflow.utils import motion_processing
@@ -457,41 +458,41 @@ def runMF(dlc_dir=os.getcwd(),
         face = pd.concat([face, face_motion, face_freq], axis=1)[:FaceCam_FrameCount]
         face.to_hdf(faceDLC_analysis, key='face')
 
-
-    for bodyfile in bodyfiles:
+    for bodyDLC in bodyfiles:
 
         #  BODY ANALYSIS
-        bodyDLC = glob.glob(os.path.join(dir_out, os.path.basename(bodyfile)[:-4] + '*labeled.h5'))
+        bodyDLC_analysis = faceDLC[:-3] + '_analysis.h5'
         dlc_body = pd.read_hdf(bodyDLC, mode='r')
+        bodyfile = glob.glob(os.path.join(os.path.dirname(dlc_dir), os.path.basename(bodyDLC).split('DeepCut')[0]+'*'))[0]
         bodyvidcap = cv2.VideoCapture(bodyfile)
         BodyCam_FPS = bodyvidcap.get(cv2.CAP_PROP_FPS)
         BodyCam_FrameTotal = len(dlc_body)
-        motion_frontpaw_raw, motion_frontpaw, motionangle_frontpaw = face_processing.dlc_pointmotion(dlc_body.values[:, 12],
+        motion_frontpaw_raw, motion_frontpaw, motionangle_frontpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 12],
                                                                                                 dlc_body.values[:, 13],
                                                                                                 dlc_body.values[:, 14])
-        motion_backpaw_raw, motion_backpaw, motionangle_backpaw = face_processing.dlc_pointmotion(dlc_body.values[:, 24],
+        motion_backpaw_raw, motion_backpaw, motionangle_backpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 24],
                                                                                             dlc_body.values[:, 25],
                                                                                             dlc_body.values[:, 26])
-        frontpaw_lrdiff = face_processing.dlc_pointdistance(dlc_body.values[:, [9, 10, 11]], dlc_body.values[:, [18, 19, 20]])
-        backpaw_lrdiff = face_processing.dlc_pointdistance(dlc_body.values[:, [21, 22, 23]], dlc_body.values[:, [30, 31, 32]])
-        rightpaws_fbdiff = face_processing.dlc_pointdistance(dlc_body.values[:, [12, 13, 14]], dlc_body.values[:, [24, 25, 26]])
-        stride_freq = face_processing.freq_analysis(rightpaws_fbdiff, BodyCam_FPS, M=128)
-        motion_mouth_raw, motion_mouth, motionangle_mouth = face_processing.dlc_pointmotion(dlc_body.values[:, 3],
+        frontpaw_lrdiff = body_processing.dlc_pointdistance(dlc_body.values[:, [9, 10, 11]], dlc_body.values[:, [18, 19, 20]])
+        backpaw_lrdiff = body_processing.dlc_pointdistance(dlc_body.values[:, [21, 22, 23]], dlc_body.values[:, [30, 31, 32]])
+        rightpaws_fbdiff = body_processing.dlc_pointdistance(dlc_body.values[:, [12, 13, 14]], dlc_body.values[:, [24, 25, 26]])
+        stride_freq = body_processing.freq_analysis(rightpaws_fbdiff, BodyCam_FPS, M=128)
+        motion_mouth_raw, motion_mouth, motionangle_mouth = body_processing.dlc_pointmotion(dlc_body.values[:, 3],
                                                                                         dlc_body.values[:, 4],
                                                                                         dlc_body.values[:, 5])
-        angle_tail_3, angle_tail = face_processing.dlc_angle(dlc_body.values[:, [33, 34, 35]], dlc_body.values[:, [36, 37, 38]],
+        angle_tail_3, angle_tail = body_processing.dlc_angle(dlc_body.values[:, [33, 34, 35]], dlc_body.values[:, [36, 37, 38]],
                                                         dlc_body.values[:, [39, 40, 41]])
-        angle_paws_front_3, angle_paws_front = face_processing.dlc_angle(dlc_body.values[:, [9, 10, 11]],
+        angle_paws_front_3, angle_paws_front = body_processing.dlc_angle(dlc_body.values[:, [9, 10, 11]],
                                                                     dlc_body.values[:, [12, 13, 14]],
                                                                     dlc_body.values[:, [15, 16, 17]])
-        angle_paws_back_3, angle_paws_back = face_processing.dlc_angle(dlc_body.values[:, [21, 22, 23]],
+        angle_paws_back_3, angle_paws_back = body_processing.dlc_angle(dlc_body.values[:, [21, 22, 23]],
                                                                 dlc_body.values[:, [24, 25, 26]],
                                                                 dlc_body.values[:, [27, 28, 29]])
         tailroot_level = -pd.Series(
             (dlc_body.values[:, 34] - np.nanmean(dlc_body.values[:, 34])) / np.nanstd(dlc_body.values[:, 34]))
         cylinder_mask = np.zeros([582, 782])
         cylinder_mask[int(np.nanpercentile(dlc_body.values[:, 22], 99) + 30):, :250] = 1
-        cylinder_motion_raw, cylinder_motion = np.nan, np.nan #face_processing.cylinder_motion(bodyfile, cylinder_mask)
+        cylinder_motion_raw, cylinder_motion = body_processing.cylinder_motion(bodyfile, cylinder_mask)
         body = pd.DataFrame({'PointMotion_FrontPaw': motion_frontpaw_raw, 'AngleMotion_FrontPaw': motionangle_frontpaw,
                             'PointMotion_Mouth': motion_mouth_raw, 'AngleMotion_Mouth': motionangle_mouth,
                             'PointMotion_BackPaw': motion_backpaw_raw, 'AngleMotion_BackPaw': motionangle_backpaw,
