@@ -18,6 +18,7 @@ import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow.utils import motion_processing
 from mouseflow.utils.preprocess_video import flip_vid
+from mouseflow import apply_models
 
 plt.interactive(False)
 
@@ -96,7 +97,12 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
             print(f'Video {os.path.basename(facefile)} already labelled. Skipping ahead...')
         else:
             print("Applying ", dlc_faceyaml, " on FACE video: ", facefile)
-            apply_facemodel(dgp, filetype, vid_output, dlc_faceyaml, dir_out, facefile)
+            if dgp:
+                apply_models.apply_dgp(dlc_faceyaml, dir_out, facefile)
+            else:
+                print(f"Generating labeled face video...")
+                apply_models.apply_dlc(filetype, vid_output, dlc_faceyaml, dir_out, facefile)
+                print("DLC face labels saved in ", dir_out)
 
     # Apply DLC/DGP Model to each body video
     for bodyfile in bodyfiles:
@@ -104,7 +110,13 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
             print(f'Video {os.path.basename(bodyfile)} already labelled. Skipping ahead...')
         else:
             print("Applying ", dlc_bodyyaml, " on BODY video: ", bodyfile)          
-            apply_bodymodel(dgp, filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile)
+            if dgp:
+                apply_models.apply_dgp(dlc_bodyyaml, dir_out, bodyfile)
+                print("DGP body labels saved in ", dir_out)
+            else:
+                print(f"Generating labeled face video...")
+                apply_models.apply_dlc(filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile)
+                print("DLC body labels saved in ", dir_out)
 
 
 def runMF(dlc_dir=os.getcwd(),
@@ -212,96 +224,3 @@ def runMF(dlc_dir=os.getcwd(),
                             'Cylinder_Motion': cylinder_motion_raw, 'Stride_Frequency': stride_freq})
         body = body[:BodyCam_FrameTotal]
         body.to_hdf(bodyDLC, key='body')
-
-
-
-## New functions
-def download_dlc():   
-    raise NotImplementedError("") 
-    # download / set DLC network directories
-    # dlc_faceyaml = '/media/oliver/Oliver_SSD1/MouseFace-Barnstedt-2019-08-21/config.yaml'
-    # dlc_bodyyaml = '/media/oliver/Oliver_SSD1/MouseBody-Barnstedt-2019-09-09/config.yaml'
-
-    # if not dlc_faceyaml:
-    #     dlc_face_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_face_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseFace'))
-    #         gdown.download_folder(dlc_face_url, os.path.join(dir, 'DLC_MouseFace'), quiet=True, use_cookies=False)
-
-    # if not dlc_bodyyaml:
-    #     dlc_body_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_body_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseBody'))
-    #         gdown.download_folder(dlc_body_url, os.path.join(dir, 'DLC_MouseBody'), quiet=True, use_cookies=False)
-
-
-def apply_dlc_body(filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile):
-    import deeplabcut
-    deeplabcut.analyze_videos(config=dlc_bodyyaml, videos=[bodyfile], shuffle=1, videotype=filetype, destfolder=dir_out)
-    print("DLC body labels saved in ", dir_out)
-    if vid_output and not glob.glob(dir_out + '/' + os.path.basename(bodyfile)[:-4] + '*labeled.mp4'):
-        print("Generating labeled body video...")
-        if vid_output > 1:
-            plottingframes = np.arange(vid_output)
-        else:
-            plottingframes = None
-        deeplabcut.create_labeled_video(config=dlc_bodyyaml, videos=[bodyfile], draw_skeleton=False,
-                                                        destfolder=dir_out, Frames2plot=plottingframes)
-                                                
-
-def apply_dgp_body(dlc_bodyyaml, dir_out, bodyfile):
-    snapshot_path, _ = get_snapshot_path('snapshot-step2-final--0', os.path.dirname(dlc_bodyyaml), shuffle=1)
-    estimate_pose(proj_cfg_file=dlc_bodyyaml,
-                            dgp_model_file=str(snapshot_path),
-                            video_file=bodyfile,
-                            output_dir=dir_out,
-                            shuffle=1,
-                            save_pose=True,
-                            save_str='',
-                            new_size=None)
-    
-def apply_bodymodel(dgp, filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile):
-    if dgp:
-        apply_dgp_body(dlc_bodyyaml, dir_out, bodyfile)
-        print("DGP body labels saved in ", dir_out)
-    else:
-        apply_dlc_body(filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile)
-
-def apply_facemodel(dgp, filetype, vid_output, dlc_faceyaml, dir_out, facefile):
-    if dgp:
-        apply_dgp_face(dlc_faceyaml, dir_out, facefile)
-    else:
-        apply_dlc_face(filetype, vid_output, dlc_faceyaml, dir_out, facefile)
-
-def apply_dlc_face(filetype, vid_output, dlc_faceyaml, dir_out, facefile):
-    import deeplabcut
-    deeplabcut.analyze_videos(config=dlc_faceyaml, videos=[facefile], shuffle=1, 
-                                        videotype=filetype, destfolder=dir_out)
-    print("DLC face labels saved in ", dir_out)
-    if vid_output and not glob.glob(dir_out + '/' + os.path.basename(facefile)[:-4] + '*labeled.mp4'):
-        print("Generating labeled face video...")
-        if vid_output > 1:
-            plottingframes = np.arange(vid_output)
-        else:
-            plottingframes = None
-        deeplabcut.create_labeled_video(config=dlc_faceyaml, videos=[facefile], draw_skeleton=False,
-                                                     destfolder=dir_out, Frames2plot=plottingframes)
-
-def apply_dgp_face(dlc_faceyaml, dir_out, facefile):
-    from deepgraphpose.models.eval import estimate_pose
-    from deepgraphpose.models.fitdgp_util import get_snapshot_path
-    snapshot_path, _ = get_snapshot_path('snapshot-step2-final--0', os.path.dirname(dlc_faceyaml), shuffle=1)
-    estimate_pose(proj_cfg_file=dlc_faceyaml,
-                            dgp_model_file=str(snapshot_path),
-                            video_file=facefile,
-                            output_dir=dir_out,
-                            shuffle=1,
-                            save_pose=True,
-                            save_str='',
-                            new_size=None)
-    print("DGP face labels saved in ", dir_out)
-                                             
