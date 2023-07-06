@@ -20,6 +20,11 @@ plt.interactive(False)
 
 
 # Calculating motion energy
+
+class CylinderMotionResult(NamedTuple):
+    raw: pd.Series
+    smoothed: pd.Series
+
 def cylinder_motion(videopath, mask, smooth_window=25, videoslice=[]):
     print("Calculating cylinder motion...")
     facemp4 = cv2.VideoCapture(videopath)
@@ -50,7 +55,7 @@ def cylinder_motion(videopath, mask, smooth_window=25, videoslice=[]):
 
     cyl = pd.Series(zscore(frame_diff.flatten()))
     cyl_smooth = pd.Series(zscore(pd.Series(smooth(frame_diff.flatten(), window_len=smooth_window)).shift(periods=-int(smooth_window/2))[:-int(smooth_window/2)]))
-    return cyl, cyl_smooth
+    return CylinderMotionResult(cyl, cyl_smooth)
 
 
 class PointMotionResult(NamedTuple):
@@ -80,9 +85,11 @@ def dlc_pointmotion(dlc, body_conf_thresh=.5, body_smooth_window=25, body_interp
     return PointMotionResult(pd.Series(xydist_raw), pd.Series(xydist_z), pd.Series(deg_interp))
 
     
+class AngleResult(NamedTuple):
+    angle3: pd.Series
+    slope: pd.Series
 
-
-def dlc_angle(point1, point2, point3, body_conf_thresh=.5, body_smooth_window=25, body_interpolation_limit=150):
+def dlc_angle(point1, point2, point3, body_conf_thresh=.5, body_smooth_window=25, body_interpolation_limit=150) -> AngleResult:
     point1, point2, point3 = point1.values, point2.values, point3.values
     confident = [(point1[:,2] > body_conf_thresh), (point2[:,2] > body_conf_thresh), (point3[:,2] > body_conf_thresh)]
     point1_conf = pd.DataFrame(np.array((point1[:,0]*confident[0], point1[:,1]*confident[0])).T, columns = ['x', 'y'])
@@ -104,7 +111,7 @@ def dlc_angle(point1, point2, point3, body_conf_thresh=.5, body_smooth_window=25
     angle_interp = angle.interpolate(method='linear', limit=body_interpolation_limit)  # linear interpolation
     deg1_smooth = pd.Series(smooth(deg1_interp, window_len=body_smooth_window)).shift(periods=-int(body_smooth_window/2))
     angle_smooth = pd.Series(smooth(angle_interp, window_len=body_smooth_window)).shift(periods=-int(body_smooth_window/2))
-    return pd.Series(angle_smooth), pd.Series(deg1_smooth)
+    return AngleResult(angle3=pd.Series(angle_smooth), slope=pd.Series(deg1_smooth))
 
 def dlc_pointdistance(point1, point2, body_conf_thresh=.5, body_interpolation_limit=300):
     point1, point2 = point1.values, point2.values
