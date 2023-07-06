@@ -280,7 +280,6 @@ def facemotion(videopath, masks, videoslice=[], total=False):
                     frame_diffmag[i, index] = cv2.cuda.absSum(mag_mask)[0] / px
                     frame_diffang[i, index] = cv2.cuda.absSum(ang_mask)[0] / px
                     frame_diff[i, index] = cv2.cuda.absSum(cv2.cuda.absdiff(frame_mask, previous_mask))[0] / px
-                    # frame_diff[i, index] = np.nanmean(cv2.absdiff(current_frame_gray * mask, previous_frame_gray * mask))
             pbar.update(1)
             i += 1
             previous_frame = current_frame.copy()
@@ -296,16 +295,49 @@ def facemotion(videopath, masks, videoslice=[], total=False):
                               columns=['MotionEnergy_Nose', 'MotionEnergy_Whiskerpad', 'MotionEnergy_Mouth', 'MotionEnergy_Cheek',
                                        'OFmag_Nose', 'OFmag_Whiskerpad', 'OFmag_Mouth', 'OFmag_Cheek',
                                        'OFang_Nose', 'OFang_Whiskerpad', 'OFang_Mouth', 'OFang_Cheek'])
-        # nose_smooth = pd.Series(smooth(frame_diff[:, 0], window_len=smooth_window)).shift(periods=-int(smooth_window/2))
-        # whisker_smooth = pd.Series(smooth(frame_diff[:, 1], window_len=smooth_window)).shift(periods=-int(smooth_window/2))
-        # mouth_smooth = pd.Series(smooth(frame_diff[:, 2], window_len=smooth_window)).shift(periods=-int(smooth_window/2))
-        # cheek_smooth = pd.Series(smooth(frame_diff[:, 3], window_len=smooth_window)).shift(periods=-int(smooth_window/2))
-        # frame_diff_smooth = pd.DataFrame({'MotionEnergy_Nose_raw': frame_diff[:, 0],
-        #                                   'MotionEnergy_Whiskerpad_raw': frame_diff[:, 1],
-        #                                   'MotionEnergy_Mouth_raw': frame_diff[:, 2],
-        #                                   'MotionEnergy_Cheek_raw': frame_diff[:, 3],
-        #                                   'MotionEnergy_Nose': nose_smooth[:frame_diff.shape[0]],
-        #                                   'MotionEnergy_Whiskerpad': whisker_smooth[:frame_diff.shape[0]],
-        #                                   'MotionEnergy_Mouth': mouth_smooth[:frame_diff.shape[0]],
-        #                                   'MotionEnergy_Cheek': cheek_smooth[:frame_diff.shape[0]]}).apply(zscore)
         return motion
+
+
+# Calculating motion energy
+def facemotion_nocuda(videopath, masks, videoslice=[], total=False):
+    if total:
+        print("Calculating whole frame-to-frame differences...")
+    else:
+        print(f"Calculating motion energy for video {videopath}...")
+    facemp4 = cv2.VideoCapture(videopath)
+    if videoslice:
+        print("Processing slice from {} to {}...".format(videoslice[0], videoslice[-1]))
+        facemp4.set(1, videoslice[0])
+        framelength = videoslice[1]-videoslice[0]
+    else:
+        framelength = int(facemp4.get(7))
+    ret, current_frame = facemp4.read()
+    previous_frame = current_frame
+    masks = [m.astype('float32') for m in masks]
+    for m in range(len(masks)):
+        masks[m][masks[m]==0] = np.nan
+
+    frame_diff = np.empty((framelength, 4))
+
+    i = 0
+    with tqdm(total=framelength) as pbar:
+        while facemp4.isOpened():
+            current_frame_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+            previous_frame_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
+
+            for index, mask in enumerate(masks):
+                frame_diff[i, index] = np.nanmean(cv2.absdiff(current_frame_gray * mask, previous_frame_gray * mask))
+            pbar.update(1)
+            i += 1
+            previous_frame = current_frame.copy()
+            ret, current_frame = facemp4.read()
+            if current_frame is None or (videoslice and len(frame_diff) > len(videoslice)-1):
+                break
+    facemp4.release()
+
+    motion = pd.DataFrame(frame_diff,
+                            columns=['MotionEnergy_Nose', 'MotionEnergy_Whiskerpad', 
+                                     'MotionEnergy_Mouth', 'MotionEnergy_Cheek',])
+
+    return motion
+
