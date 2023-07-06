@@ -5,7 +5,7 @@
 Created on Wed May  8 14:31:51 2019
 @author: Oliver Barnstedt
 """
-
+from typing import NamedTuple
 
 import pandas as pd
 from tqdm import tqdm
@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy.stats.mstats import zscore
 from scipy import signal, optimize
+
 
 plt.interactive(False)
 
@@ -52,8 +53,12 @@ def cylinder_motion(videopath, mask, smooth_window=25, videoslice=[]):
     return cyl, cyl_smooth
 
 
+class PointMotionResult(NamedTuple):
+    raw_distance: pd.Series
+    proc_distance: pd.Series
+    angles: pd.Series
 
-def dlc_pointmotion(dlc, body_conf_thresh=.5, body_smooth_window=25, body_interpolation_limit=150):
+def dlc_pointmotion(dlc, body_conf_thresh=.5, body_smooth_window=25, body_interpolation_limit=150) -> PointMotionResult:
     x = dlc['x']
     y = dlc['y']
     likelihood = dlc['likelihood']
@@ -71,7 +76,10 @@ def dlc_pointmotion(dlc, body_conf_thresh=.5, body_smooth_window=25, body_interp
     xydist_z_raw = ((xydist_interp - xydist_interp.mean()) / xydist_interp.std(ddof=0))[:len(x)]
     xydist_smooth = pd.Series(smooth(xydist_interp, window_len=body_smooth_window)).shift(periods=-int(body_smooth_window/2))
     xydist_z = ((xydist_smooth - xydist_smooth.mean()) / xydist_smooth.std(ddof=0))[:len(x)]
-    return pd.Series(xydist_raw), pd.Series(xydist_z), pd.Series(deg_interp)
+
+    return PointMotionResult(pd.Series(xydist_raw), pd.Series(xydist_z), pd.Series(deg_interp))
+
+    
 
 
 def dlc_angle(point1, point2, point3, body_conf_thresh=.5, body_smooth_window=25, body_interpolation_limit=150):
