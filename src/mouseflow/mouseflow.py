@@ -344,18 +344,27 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
             #  FACE DEEPGRAPHPOSE / DEEPLABCUT
             print("Applying ", dlc_faceyaml, " on FACE video: ", facefile)
             if dgp:
-                from deepgraphpose.models.eval import estimate_pose
+                from deepgraphpose.models.eval import estimate_pose, plot_dgp
                 from deepgraphpose.models.fitdgp_util import get_snapshot_path
                 snapshot_path, _ = get_snapshot_path('snapshot-0-step2-final--0', os.path.dirname(dlc_faceyaml), shuffle=1)
-                estimate_pose(proj_cfg_file=dlc_faceyaml,
+                if vid_output > 1:
+                    plot_dgp(facefile,
+                            dir_out,
+                            proj_cfg_file=dlc_faceyaml,
                             dgp_model_file=str(snapshot_path),
-                            video_file=facefile,
-                            output_dir=dir_out,
                             shuffle=1,
-                            save_pose=True,
-                            save_str='',
-                            new_size=None)
-                print("DGP face labels saved in ", dir_out)
+                            dotsize=8)
+                    print("DGP face labels and labeled video saved in ", dir_out)
+                else:
+                    estimate_pose(proj_cfg_file=dlc_faceyaml,
+                                dgp_model_file=str(snapshot_path),
+                                video_file=facefile,
+                                output_dir=dir_out,
+                                shuffle=1,
+                                save_pose=True,
+                                save_str='',
+                                new_size=None)
+                    print("DGP face labels saved in ", dir_out)
             else:
                 import deeplabcut
                 deeplabcut.analyze_videos(config=dlc_faceyaml, videos=[facefile], shuffle=1, 
