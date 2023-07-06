@@ -346,7 +346,7 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
             if dgp:
                 from deepgraphpose.models.eval import estimate_pose
                 from deepgraphpose.models.fitdgp_util import get_snapshot_path
-                snapshot_path, _ = get_snapshot_path('snapsho-step2-final--0', os.path.dirname(dlc_faceyaml), shuffle=1)
+                snapshot_path, _ = get_snapshot_path('snapshot-0-step2-final--0', os.path.dirname(dlc_faceyaml), shuffle=1)
                 estimate_pose(proj_cfg_file=dlc_faceyaml,
                             dgp_model_file=str(snapshot_path),
                             video_file=facefile,
@@ -471,10 +471,10 @@ def runMF(dlc_dir=os.getcwd(),
         bodyvidcap = cv2.VideoCapture(bodyfile)
         BodyCam_FPS = bodyvidcap.get(cv2.CAP_PROP_FPS)
         BodyCam_FrameTotal = len(dlc_body)
-        motion_frontpaw_raw, motion_frontpaw, motionangle_frontpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 12],
+        motion_frontpaw_raw, motionangle_frontpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 12],
                                                                                                 dlc_body.values[:, 13],
                                                                                                 dlc_body.values[:, 14])
-        motion_backpaw_raw, motion_backpaw, motionangle_backpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 24],
+        motion_backpaw_raw, motionangle_backpaw = body_processing.dlc_pointmotion(dlc_body.values[:, 24],
                                                                                             dlc_body.values[:, 25],
                                                                                             dlc_body.values[:, 26])
         frontpaw_lrdiff = body_processing.dlc_pointdistance(dlc_body.values[:, [9, 10, 11]], dlc_body.values[:, [18, 19, 20]])
