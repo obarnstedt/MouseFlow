@@ -122,13 +122,12 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
                 print("DLC body labels saved in ", dir_out)
 
 
-def runMF(dlc_dir=os.getcwd(),
-            overwrite=False,
+def runMF(dlc_dir=os.getcwd(), overwrite=False, dgp=True,
              pupil_conf_thresh = .99, pupil_smooth_window = 1, 
               pupil_interpolation_limit = 2, pupil_na_limit = .25, eyelid_conf_thresh = .999, 
               eyelid_smooth_window = 1, eyelid_interpolation_limit = 2, 
               faceregion_conf_thresh = .99, faceregion_size_whiskers=1, faceregion_size_nose=1, 
-              faceregion_size_mouth=1, faceregion_size_cheek=1):
+              faceregion_size_mouth=1, faceregion_size_cheek=1, conf_thresh=None):
     # dir defines directory to detect face/body videos, standard: current working directory
     # facekey defines unique string that is contained in all face videos. If none, no face videos will be considered.
     # bodykey defines unique string that is contained in all face videos. If none, no face videos will be considered.
@@ -155,6 +154,11 @@ def runMF(dlc_dir=os.getcwd(),
 
             # reading in DLC/DGP file
             facemarkers = pd.read_hdf(faceDLC, mode='r')
+
+            #TODO: process unlikely markers before further processing
+            if not conf_thresh:
+                conf_thresh = 0.5 if dgp else 0.99
+
             face = pd.DataFrame()
             pupil = face_processing.pupilextraction(
                 facemarkers, 
@@ -215,6 +219,8 @@ def runMF(dlc_dir=os.getcwd(),
 
         bodyfile = glob.glob(os.path.join(os.path.dirname(dlc_dir), os.path.basename(bodyDLC).split('DLC')[0] + '*'))[0]
         BodyCam_FPS = cv2.VideoCapture(bodyfile).get(cv2.CAP_PROP_FPS)
+        BodyCam_width = cv2.VideoCapture(bodyfile).get(cv2.CAP_PROP_FRAME_WIDTH)
+        BodyCam_height = cv2.VideoCapture(bodyfile).get(cv2.CAP_PROP_FRAME_HEIGHT)
 
         # Paw motion
         motion_frontpaw = body_processing.dlc_pointmotion(body_markers['paw_front-right2', 'x'], body_markers['paw_front-right2', 'y'], body_markers['paw_front-right2', 'likelihood'])
@@ -235,9 +241,8 @@ def runMF(dlc_dir=os.getcwd(),
         angle_tail =       body_processing.dlc_angle(body_markers['tail1'], body_markers['tail2'], body_markers['tail3'])
         tailroot_level = -zscore(body_markers['tail1', 'y'])
 
-        #TODO: adapt to different frame resolutions
-        cylinder_mask = np.zeros([582, 782])
-        cylinder_mask[int(np.nanpercentile(body_markers['paw_back-right1', 'y'].values, 99) + 30):, :250] = 1
+        cylinder_mask = np.zeros([BodyCam_height, BodyCam_width])
+        cylinder_mask[int(np.nanpercentile(body_markers['paw_back-right1', 'y'].values, 99) + 30):, :int(BodyCam_width/3)] = 1
         cylinder_motion = body_processing.cylinder_motion(bodyfile, cylinder_mask)
 
         body = pd.DataFrame({
