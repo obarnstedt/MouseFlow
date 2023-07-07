@@ -26,7 +26,8 @@ plt.interactive(False)
 
 
 def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
-           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, dlc_faceyaml='', dlc_bodyyaml=''):
+           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, models_dir='', 
+           facemodel_name='MouseFace-Barnstedt-2019-08-21', bodymodel_name='MouseBody-Barnstedt-2019-09-09'):
     # vid_dir defines directory to detect face/body videos, standard: current working directory
     # facekey defines unique string that is contained in all face videos. If none, no face videos will be considered.
     # bodykey defines unique string that is contained in all body videos. If none, no body videos will be considered.
@@ -57,7 +58,8 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
     if not os.path.exists(dir_out):
         os.makedirs(dir_out)
 
-    # download_dlc()
+    # check where marker models are located, download if not present 
+    dlc_faceyaml, dlc_bodyyaml = apply_models.download_models(models_dir, facemodel_name, bodymodel_name)
 
     # identify video files
     if facekey==True:

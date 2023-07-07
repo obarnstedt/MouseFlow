@@ -1,29 +1,21 @@
 import glob
 import os
 import numpy as np
+import gdown
 
+def download_models(models_dir, facemodel_name, bodymodel_name):   
+    if not os.path.exists(os.path.join(models_dir, facemodel_name)):
+        dlc_face_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
+        gdown.download_folder(dlc_face_url, models_dir, quiet=True, use_cookies=False)
 
-def download_dlc():   
-    raise NotImplementedError("") 
-    # download / set DLC network directories
-    # dlc_faceyaml = '/media/oliver/Oliver_SSD1/MouseFace-Barnstedt-2019-08-21/config.yaml'
-    # dlc_bodyyaml = '/media/oliver/Oliver_SSD1/MouseBody-Barnstedt-2019-09-09/config.yaml'
+    if not os.path.exists(os.path.join(models_dir, bodymodel_name)):
+        dlc_body_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
+        gdown.download_folder(dlc_body_url, models_dir, quiet=True, use_cookies=False)
+    
+    dlc_faceyaml = os.path.join(models_dir, facemodel, 'config.yaml')
+    dlc_bodyyaml = os.path.join(models_dir, bodymodel, 'config.yaml')
 
-    # if not dlc_faceyaml:
-    #     dlc_face_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_face_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseFace'))
-    #         gdown.download_folder(dlc_face_url, os.path.join(dir, 'DLC_MouseFace'), quiet=True, use_cookies=False)
-
-    # if not dlc_bodyyaml:
-    #     dlc_body_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_body_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseBody'))
-    #         gdown.download_folder(dlc_body_url, os.path.join(dir, 'DLC_MouseBody'), quiet=True, use_cookies=False)
+    return dlc_faceyaml, dlc_bodyyaml
 
 
 def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
