@@ -14,10 +14,9 @@ import pandas as pd
 
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
-from mouseflow.utils.configure_tensorflow import configure_tensorflow
 from mouseflow.utils import motion_processing
-from mouseflow.utils.installation import is_installed
 from mouseflow.utils.preprocess_video import flip_vid
+from mouseflow.utils import is_installed, configure_tensorflow
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
