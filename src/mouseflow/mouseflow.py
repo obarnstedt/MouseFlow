@@ -16,11 +16,11 @@ import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow.utils.configure_tensorflow import configure_tensorflow
 from mouseflow.utils import motion_processing
+from mouseflow.utils.installation import is_installed
 from mouseflow.utils.preprocess_video import flip_vid
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
-
 
 def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
            filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, dlc_faceyaml='', dlc_bodyyaml=''):
@@ -32,6 +32,10 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
     # of_type sets the optical flow algorithm
     
     configure_tensorflow(allow_memory_growth=True, logging_level='ERROR')
+    
+    if dgp and not is_installed('deepgraphpose'):
+        print('DGP import error; working with DLC...')
+        dgp = False
 
     # set directories
     if os.path.isdir(vid_dir):
@@ -94,13 +98,6 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
             bodyfiles_flipped.append(flip_vid(vid, horizontal=True))
         bodyfiles = bodyfiles_flipped    
 
-    # check if DGP is working, otherwise resort to DLC
-    if dgp:
-        try:
-            import deepgraphpose
-        except ImportError as e:
-            print('DGP import error; working with DLC...')
-            dgp = False
 
     for facefile in facefiles:
         if glob.glob(os.path.join(dir_out, os.path.basename(facefile)[:-4]+'*.h5')) and not overwrite:
@@ -170,6 +167,8 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
                         plottingframes = None
                     deeplabcut.create_labeled_video(config=dlc_bodyyaml, videos=[bodyfile], draw_skeleton=False,
                                                         destfolder=dir_out, Frames2plot=plottingframes)
+
+
 
 
 
