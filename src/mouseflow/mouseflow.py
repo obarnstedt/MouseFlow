@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import matplotlib
-
-matplotlib.use('TKAgg')
 import glob
 import os
 
 # import gdown
 import cv2
 import h5py
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -17,12 +15,13 @@ from scipy.stats import zscore
 
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
+from mouseflow import apply_models
 from mouseflow.utils import motion_processing
 from mouseflow.utils.preprocess_video import flip_vid
-from mouseflow import apply_models
+from mouseflow.utils.tensorflow_utils import config_tensorflow
 
+matplotlib.use('TKAgg')
 plt.interactive(False)
-
 
 
 def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
@@ -34,13 +33,9 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
     # batch defines how many videos to analyse (True for all, integer for the first n videos)
 
-    import tensorflow as tf
-
+    
     #  To evade cuDNN error message:
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    tf.logging.set_verbosity(tf.logging.ERROR)
+    config_tensorflow(log_level='ERROR', allow_growth=True)
 
     # check if DGP is working, otherwise resort to DLC
     if dgp:
