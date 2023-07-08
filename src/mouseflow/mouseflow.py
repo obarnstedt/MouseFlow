@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import matplotlib
-
-matplotlib.use('TKAgg')
 import glob
 import os
 
 # import gdown
 import cv2
 import h5py
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
+from mouseflow.utils.configure_tensorflow import configure_tensorflow
 from mouseflow.utils import motion_processing
-from mouseflow.utils.generic import smooth
 from mouseflow.utils.preprocess_video import flip_vid
 
+matplotlib.use('TKAgg')
 plt.interactive(False)
+
 
 def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
            filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, dlc_faceyaml='', dlc_bodyyaml=''):
@@ -30,15 +30,8 @@ def runDLC(vid_dir=os.getcwd(), dlc_dir='', facekey='', bodykey='', dgp=True, ba
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
     # batch defines how many videos to analyse (True for all, integer for the first n videos)
     # of_type sets the optical flow algorithm
-
-    import tensorflow as tf
-
-    #  To evade cuDNN error message:
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    tf.logging.set_verbosity(tf.logging.ERROR)
-
+    
+    configure_tensorflow(allow_memory_growth=True, logging_level='ERROR')
 
     # set directories
     if os.path.isdir(vid_dir):
