@@ -17,12 +17,12 @@ import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow import apply_models
 from mouseflow.utils import motion_processing
+from mouseflow.utils.installation_utils import is_installed
 from mouseflow.utils.preprocess_video import flip_vid
 from mouseflow.utils.tensorflow_utils import config_tensorflow
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
-
 
 def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
            filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, models_dir='', 
@@ -38,12 +38,9 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
     config_tensorflow(log_level='ERROR', allow_growth=True)
 
     # check if DGP is working, otherwise resort to DLC
-    if dgp:
-        try:
-            import deepgraphpose
-        except ImportError as e:
-            print('DGP import error; working with DLC...')
-            dgp = False
+    if dgp == True and not is_installed('deepgraphpose'):
+        print('DGP import error; working with DLC...')
+        dgp = False
 
     # set directories
     if os.path.isdir(vid_dir):
