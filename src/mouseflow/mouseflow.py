@@ -16,10 +16,8 @@ from scipy.stats import zscore
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow import apply_models
-from mouseflow.utils import motion_processing
-from mouseflow.utils.installation_utils import is_installed
+from mouseflow.utils import config_tensorflow, is_installed, motion_processing
 from mouseflow.utils.preprocess_video import flip_vid
-from mouseflow.utils.tensorflow_utils import config_tensorflow
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
