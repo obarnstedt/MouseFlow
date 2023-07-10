@@ -22,15 +22,14 @@ from mouseflow.utils.preprocess_video import flip_vid
 matplotlib.use('TKAgg')
 plt.interactive(False)
 
-def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, overwrite=False, 
-           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, models_dir='', 
+def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=True, batch='all', overwrite=False, 
+           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False, 
            facemodel_name='MouseFace-Barnstedt-2019-08-21', bodymodel_name='MouseBody-Barnstedt-2019-09-09'):
     # vid_dir defines directory to detect face/body videos, standard: current working directory
-    # facekey defines unique string that is contained in all face videos. If none, no face videos will be considered.
-    # bodykey defines unique string that is contained in all body videos. If none, no body videos will be considered.
+    # facekey defines unique string that is contained in all face videos. If None, no face videos will be considered.
+    # bodykey defines unique string that is contained in all body videos. If None, no body videos will be considered.
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
     # batch defines how many videos to analyse (True for all, integer for the first n videos)
-
     
     #  To evade cuDNN error message:
     config_tensorflow(log_level='ERROR', allow_growth=True)
@@ -52,17 +51,22 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
     dlc_faceyaml, dlc_bodyyaml = apply_models.download_models(models_dir, facemodel_name, bodymodel_name)
 
     # identify video files
+    facefiles = []
+    bodyfiles = []
+    if os.path.isfile(vid_dir):
+        if facekey in vid_dir:
+            facefiles = [vid_dir]
+        elif bodykey in vid_dir:
+            bodyfiles = [vid_dir]
+        else:
+            print(f'Need to pass <facekey> or <bodykey> argument to classify video {vid_dir}.')
     if facekey==True:
         facefiles = [vid_dir]
-        bodyfiles = []
     elif bodykey==True:
-        facefiles = []
         bodyfiles = [vid_dir]
     elif facekey=='' or facekey==False or facekey==None:
-        facefiles = []
         bodyfiles = glob.glob(os.path.join(vid_dir,'*'+bodykey+'*'+filetype))
     elif bodykey=='' or bodykey==False or bodykey==None:
-        bodyfiles = []
         facefiles = glob.glob(os.path.join(vid_dir,'*'+facekey+'*'+filetype))
     else:
         facefiles = glob.glob(os.path.join(vid_dir,'*'+facekey+'*'+filetype))
@@ -84,6 +88,11 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
             bodyfiles_flipped.append(flip_vid(vid, horizontal=True))
         bodyfiles = bodyfiles_flipped    
 
+    # batch mode (if user specifies a number n, it will only process the first n files)
+    if batch.isnumeric():
+        facefiles = facefiles[:batch]
+        bodyfiles = bodyfiles[:batch]
+
     # Apply DLC/DGP Model to each face video
     for facefile in facefiles:
         if glob.glob(os.path.join(dir_out, os.path.basename(facefile)[:-4]+'*.h5')) and not overwrite:
@@ -93,9 +102,7 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
             if dgp:
                 apply_models.apply_dgp(dlc_faceyaml, dir_out, facefile, vid_output)
             else:
-                print(f"Generating labeled face video...")
-                apply_models.apply_dlc(filetype, vid_output, dlc_faceyaml, dir_out, facefile)
-                print("DLC face labels saved in ", dir_out)
+                apply_models.apply_dlc(filetype, vid_output, dlc_faceyaml, dir_out, facefile, overwrite)
 
     # Apply DLC/DGP Model to each body video
     for bodyfile in bodyfiles:
@@ -105,11 +112,8 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
             print("Applying ", dlc_bodyyaml, " on BODY video: ", bodyfile)          
             if dgp:
                 apply_models.apply_dgp(dlc_bodyyaml, dir_out, bodyfile)
-                print("DGP body labels saved in ", dir_out)
             else:
-                print(f"Generating labeled face video...")
-                apply_models.apply_dlc(filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile)
-                print("DLC body labels saved in ", dir_out)
+                apply_models.apply_dlc(filetype, vid_output, dlc_bodyyaml, dir_out, bodyfile, overwrite)
 
 
 def runMF(dlc_dir=os.getcwd(), overwrite=False, dgp=True,
@@ -128,6 +132,9 @@ def runMF(dlc_dir=os.getcwd(), overwrite=False, dgp=True,
     # TODO: go through DGP files if requested
     facefiles = glob.glob(os.path.join(dlc_dir,'*MouseFace*1030000.h5'))
     bodyfiles = glob.glob(os.path.join(dlc_dir,'*MouseBody*1030000.h5'))
+
+    if (len(facefiles) + len(bodyfiles)) == 0:
+        print(f'No marker files found in directory {dlc_dir}. Check directory.')
 
     for faceDLC in facefiles:
         

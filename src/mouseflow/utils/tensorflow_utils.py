@@ -1,5 +1,8 @@
-from typing import Literal
-
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+    
 
 def config_tensorflow(log_level: Literal['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'] = 'ERROR', allow_growth: bool = True):
     import tensorflow as tf
