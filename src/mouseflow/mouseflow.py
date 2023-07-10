@@ -29,7 +29,7 @@ def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=
     # facekey defines unique string that is contained in all face videos. If None, no face videos will be considered.
     # bodykey defines unique string that is contained in all body videos. If None, no body videos will be considered.
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
-    # batch defines how many videos to analyse (True for all, integer for the first n videos)
+    # batch defines how many videos to analyse ('all' for all, integer for the first n videos)
     
     #  To evade cuDNN error message:
     config_tensorflow(log_level='ERROR', allow_growth=True)
@@ -38,14 +38,6 @@ def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=
     if dgp == True and not is_installed('deepgraphpose'):
         print('DGP import error; working with DLC...')
         dgp = False
-
-    # set directories
-    if os.path.isdir(vid_dir):
-        dir_out = os.path.join(vid_dir, 'mouseflow')
-    else:
-        dir_out = os.path.join(os.path.dirname(vid_dir), 'mouseflow')
-    if not os.path.exists(dir_out):
-        os.makedirs(dir_out)
 
     # check where marker models are located, download if not present 
     dlc_faceyaml, dlc_bodyyaml = apply_models.download_models(models_dir, facemodel_name, bodymodel_name)
@@ -89,9 +81,21 @@ def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=
         bodyfiles = bodyfiles_flipped    
 
     # batch mode (if user specifies a number n, it will only process the first n files)
-    if batch.isnumeric():
+    try:
+        batch = int(batch)
         facefiles = facefiles[:batch]
         bodyfiles = bodyfiles[:batch]
+        print(f'Only processing first {batch} face and body videos...')
+    except ValueError:
+        pass
+
+    # set directories
+    if os.path.isdir(vid_dir):
+        dir_out = os.path.join(vid_dir, 'mouseflow')
+    else:
+        dir_out = os.path.join(os.path.dirname(vid_dir), 'mouseflow')
+    if not os.path.exists(dir_out):
+        os.makedirs(dir_out)
 
     # Apply DLC/DGP Model to each face video
     for facefile in facefiles:

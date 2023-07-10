@@ -45,14 +45,10 @@ def apply_dlc(filetype, vid_output, dlc_yaml, dir_out, vid_file, overwrite):
 
     import deeplabcut
 
-    if overwrite:  # if overwrite desired, identify and delete previously processed marker and video file
-        from deeplabcut.utils.auxiliaryfunctions import find_analyzed_data
-        analysisfile, _, _ = find_analyzed_data(dir_out, os.path.splitext(vid_file)[0], scorer='DLC_resnet50_Mouse')
-        if analysisfile:
-            os.remove(analysisfile)
-        labeled_vid = glob.glob(dir_out + '/' + os.path.basename(vid_file)[:-4] + '*labeled.mp4')
-        if labeled_vid:
-            [os.remove(f) for f in labeled_vid]
+    if overwrite:  # if overwrite desired, identify and delete previously processed marker and video files
+        analysisfiles = glob.glob(os.path.join(dir_out, os.path.splitext(os.path.basename(vid_file))[0] + '*'))
+        if analysisfiles:
+            [os.remove(f) for f in analysisfiles]
 
     deeplabcut.analyze_videos(config=dlc_yaml, videos=[vid_file], shuffle=1, videotype=filetype, destfolder=dir_out)
     print("DLC labels saved in ", dir_out)
