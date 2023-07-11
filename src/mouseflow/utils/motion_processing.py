@@ -607,6 +607,9 @@ def dlc_pointdistance(point1, point2, body_conf_thresh=.5, body_interpolation_li
 
     return pd.Series(xydist_raw), pd.Series(xydist_z)
 
+def dlc_pointdistance2(point1, point2):
+    return pd.Series(np.linalg.norm((point2 - point1), axis=1))
+
 def freq_analysis(x, f_s=75, M=128):
     freqs, times, Sx = signal.spectrogram(x, fs=f_s, window='hanning',
                                           nperseg=M, noverlap=M - 50,

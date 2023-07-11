@@ -1,35 +1,28 @@
 import glob
 import os
 import numpy as np
+import gdown
+
+def download_models(models_dir, facemodel_name, bodymodel_name):   
+    if not os.path.exists(os.path.join(models_dir, facemodel_name)):
+        dlc_face_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
+        gdown.download_folder(dlc_face_url, models_dir, quiet=True, use_cookies=False)
+
+    if not os.path.exists(os.path.join(models_dir, bodymodel_name)):
+        dlc_body_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
+        gdown.download_folder(dlc_body_url, models_dir, quiet=True, use_cookies=False)
+    
+    dlc_faceyaml = os.path.join(models_dir, facemodel_name, 'config.yaml')
+    dlc_bodyyaml = os.path.join(models_dir, bodymodel_name, 'config.yaml')
+
+    return dlc_faceyaml, dlc_bodyyaml
 
 
-def download_dlc():   
-    raise NotImplementedError("") 
-    # download / set DLC network directories
-    # dlc_faceyaml = '/media/oliver/Oliver_SSD1/MouseFace-Barnstedt-2019-08-21/config.yaml'
-    # dlc_bodyyaml = '/media/oliver/Oliver_SSD1/MouseBody-Barnstedt-2019-09-09/config.yaml'
-
-    # if not dlc_faceyaml:
-    #     dlc_face_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_face_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseFace'))
-    #         gdown.download_folder(dlc_face_url, os.path.join(dir, 'DLC_MouseFace'), quiet=True, use_cookies=False)
-
-    # if not dlc_bodyyaml:
-    #     dlc_body_url = 'https://drive.google.com/drive/folders/1_XPPyzaxMjQ901vJCwtv1g_h5DYWHM8j?usp=sharing'
-    #     if dlc_dir:
-    #         gdown.download_folder(dlc_body_url, dlc_dir, quiet=True, use_cookies=False)
-    #     else:
-    #         os.makedirs(os.path.join(dir, 'DLC_MouseBody'))
-    #         gdown.download_folder(dlc_body_url, os.path.join(dir, 'DLC_MouseBody'), quiet=True, use_cookies=False)
-
-
+# TODO: change output file names
 def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
     from deepgraphpose.models.eval import estimate_pose, plot_dgp
     from deepgraphpose.models.fitdgp_util import get_snapshot_path
-    snapshot_path, _ = get_snapshot_path('snapshot-0-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
+    snapshot_path, _ = get_snapshot_path('snapshot-0-0-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
     if vid_output > 1:
         plot_dgp(vid_file,
                 dir_out,
@@ -48,12 +41,21 @@ def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
                             save_pose=True,
                             save_str=os.path.basename(dlc_yaml),
                             new_size=None)
-        print("DGP labels video saved in ", dir_out)
-
-def apply_dlc(filetype, vid_output, dlc_yaml, dir_out, vid_file):
+        print("DGP labels saved in ", dir_out)
+    
+def apply_dlc(filetype, vid_output, dlc_yaml, dir_out, vid_file, overwrite):
     import deeplabcut
+
+    if overwrite:  # if overwrite desired, identify and delete previously processed marker and video files
+        analysisfiles = glob.glob(os.path.join(dir_out, os.path.splitext(os.path.basename(vid_file))[0] + '*'))
+        if analysisfiles:
+            [os.remove(f) for f in analysisfiles]
+
     deeplabcut.analyze_videos(config=dlc_yaml, videos=[vid_file], shuffle=1, videotype=filetype, destfolder=dir_out)
+    print("DLC labels saved in ", dir_out)
+
     if vid_output and not glob.glob(dir_out + '/' + os.path.basename(vid_file)[:-4] + '*labeled.mp4'):
+        print("Generating DLC labeled video...")
         deeplabcut.create_labeled_video(
             config=dlc_yaml, 
             videos=[vid_file], 
@@ -61,3 +63,4 @@ def apply_dlc(filetype, vid_output, dlc_yaml, dir_out, vid_file):
             destfolder=dir_out, 
             Frames2plot=np.arange(vid_output) if vid_output > 1 else None
         )
+    print("DLC labeled video saved in ", dir_out)
