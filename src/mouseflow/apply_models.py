@@ -18,6 +18,7 @@ def download_models(models_dir, facemodel_name, bodymodel_name):
     return dlc_faceyaml, dlc_bodyyaml
 
 
+# TODO: change output file names
 def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
     from deepgraphpose.models.eval import estimate_pose, plot_dgp
     from deepgraphpose.models.fitdgp_util import get_snapshot_path

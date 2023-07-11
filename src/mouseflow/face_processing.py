@@ -5,6 +5,7 @@
 Created on Wed May  8 14:31:51 2019
 @author: Oliver Barnstedt
 """
+from typing import NamedTuple
 
 import glob
 import math
@@ -20,60 +21,37 @@ from mouseflow.utils.generic import smooth
 
 plt.interactive(False)
 
-def pupilextraction(dlc_face, pupil_conf_thresh=.99, pupil_smooth_window=75, pupil_interpolation_limit=150, pupil_na_limit=.25):
-    pupil_labels_xy = dlc_face.values[:, [21, 22, 24, 25, 27, 28, 30, 31, 33, 34, 36, 37]]
-    pupil_confidence = dlc_face.values[:, [23, 26, 29, 32, 35, 38]]
-    pupil_confident = pupil_confidence[:, [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]] > pupil_conf_thresh
-    pupil_labels_xy_confident = pupil_labels_xy * pupil_confident
-    pupil_labels_xy_confident[pupil_labels_xy_confident == 0] = np.nan
-    pupil_circle = np.zeros(shape=(len(pupil_labels_xy), 2), dtype=object)
+
+class PupilResult(NamedTuple):
+    pupil_x_raw: pd.Series
+    pupil_y_raw: pd.Series
+    pupil_xydist_raw: pd.Series
+    pupil_diam_raw: pd.Series
+
+def pupilextraction(pupil_markers_xy_confident):
+    pupil_circle = np.zeros(shape=(len(pupil_markers_xy_confident), 2), dtype=object)
     print("Fitting circle to pupil...")
-    for i in tqdm(range(len(pupil_labels_xy))):
-        pupilpoints = np.float32(pupil_labels_xy_confident[i].reshape(6, 2))  # 2D points from DLC MouseFace
+
+    # 2D points from DLC MouseFace
+    for i in tqdm(range(len(pupil_markers_xy_confident))):
+        pupilpoints = np.float32(pupil_markers_xy_confident[i].reshape(6, 2))  
         pupil_circle[i, :] = cv2.minEnclosingCircle(pupilpoints)
 
+    # extract pupil centroid
     pupil_centre = np.asarray(tuple(pupil_circle[:, 0]), dtype=np.float32)
     pupil_x_raw = pd.Series(pupil_centre[:, 0])
-    pupil_x_interp = pupil_x_raw.interpolate(method='linear', limit=pupil_interpolation_limit)
-    pupil_x_smooth = pd.Series(smooth(pupil_x_interp, window_len=round(pupil_smooth_window/10))).shift(
-        periods=-int(pupil_smooth_window/10 / 2))
-    pupil_x_z = pd.Series((pupil_x_smooth - pupil_x_smooth.mean()) / pupil_x_smooth.std(ddof=0))
-
     pupil_y_raw = pd.Series(pupil_centre[:, 1])
-    pupil_y_interp = pupil_y_raw.interpolate(method='linear', limit=pupil_interpolation_limit)
-    pupil_y_smooth = pd.Series(smooth(pupil_y_interp, window_len=round(pupil_smooth_window/10))).shift(
-        periods=-int(pupil_smooth_window/10 / 2))
-    pupil_y_z = pd.Series((pupil_y_smooth - pupil_y_smooth.mean()) / pupil_y_smooth.std(ddof=0))
 
+    # extract pupil movement
     pupil_xy = pd.DataFrame(np.array((pupil_x_raw, pupil_y_raw)).T, columns=['x', 'y'])
     pupil_xy[pupil_xy == 0] = np.nan
     pupil_xydiff_raw = pupil_xy.diff()
     pupil_xydist_raw = pd.Series(np.linalg.norm(pupil_xydiff_raw, axis=1))
-    pupil_xydist_interp = pupil_xydist_raw.interpolate(method='linear', limit=pupil_interpolation_limit)  # linear interpolation
-    pupil_xydist_smooth = pd.Series(smooth(pupil_xydist_interp, window_len=round(pupil_smooth_window/10))).shift(
-        periods=-int(pupil_smooth_window/10 / 2))
-    pupil_xydist_z = ((pupil_xydist_interp - pupil_xydist_interp.mean()) / pupil_xydist_interp.std(ddof=0))[:len(pupil_x_raw)]
 
+    # extract pupil diameter
     pupil_diam_raw = pd.Series(pupil_circle[:, 1], dtype=np.float32)
-    pupil_diam_interp = pupil_diam_raw.interpolate(method='linear',
-                                                   limit=pupil_interpolation_limit)  # linear interpolation
-    pupil_diam_smooth = pd.Series(smooth(pupil_diam_interp, window_len=pupil_smooth_window)).shift(
-        periods=-int(pupil_smooth_window / 2))
-    pupil_diam_z = pd.Series((pupil_diam_smooth - pupil_diam_smooth.mean()) / pupil_diam_smooth.std(ddof=0))
 
-    pupil_saccades = pd.Series(pupil_x_smooth.diff().abs() > 1.5)
-
-    pupil = pd.concat([pupil_x_raw, pupil_x_interp, pupil_x_smooth, pupil_x_z, pupil_y_raw, pupil_y_interp,
-                       pupil_y_smooth, pupil_y_z, pupil_diam_raw, pupil_diam_interp, pupil_diam_smooth,
-                       pupil_diam_z, pupil_xydist_z, pupil_saccades], axis=1).rename(columns={0:'x_raw', 1:'x_interp', 2:'x_smooth', 3:'x_z',
-                                                                      4:'y_raw', 5:'y_interp', 6:'y_smooth', 7:'y_z',
-                                                                      8:'diam_raw', 9:'diam_interp', 10:'diam_smooth', 11:'diam_z',
-                                                                      12:'shift_z', 13:'saccades'})
-
-    if np.mean(pupil_diam_raw.isna()) > pupil_na_limit:  # if too many missing values present, fill everything with NANs
-        pupil = np.nan
-
-    return pupil
+    return PupilResult(pd.Series(pupil_x_raw), pd.Series(pupil_y_raw), pd.Series(pupil_xydist_raw), pd.Series(pupil_diam_raw))
 
 
 def eyeblink(dlc_face, eyelid_conf_thresh=.999, eyelid_smooth_window=25, eyelid_interpolation_limit=150):
