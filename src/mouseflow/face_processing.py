@@ -45,8 +45,7 @@ def pupilextraction(pupil_markers_xy_confident):
     # extract pupil movement
     pupil_xy = pd.DataFrame(np.array((pupil_x_raw, pupil_y_raw)).T, columns=['x', 'y'])
     pupil_xy[pupil_xy == 0] = np.nan
-    pupil_xydiff_raw = pupil_xy.diff()
-    pupil_xydist_raw = pd.Series(np.linalg.norm(pupil_xydiff_raw, axis=1))
+    pupil_xydist_raw = pd.Series(np.linalg.norm(pupil_xy.diff(), axis=1))
 
     # extract pupil diameter
     pupil_diam_raw = pd.Series(pupil_circle[:, 1], dtype=np.float32)

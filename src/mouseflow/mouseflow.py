@@ -180,7 +180,6 @@ def runMF(dlc_dir=os.getcwd(),
             markers_face = pd.read_hdf(faceDLC, mode='r')
             markers_face.columns = markers_face.columns.droplevel(0)
 
-            # TODO: process unlikely markers before further processing
             # filling low-confidence markers with NAN
             markers_face_conf = confidence_na(dgp, conf_thresh, markers_face)
 
@@ -191,16 +190,9 @@ def runMF(dlc_dir=os.getcwd(),
                 markers_face_conf[['pupil'+str(n+1) for n in range(6)]].interpolate(
                     method='linear', limit=interpolation_limits_frames['pupil'])
 
-            # creating and populating 'face' dataframe
-            face = pd.DataFrame()
+            # extracting pupil and eyelid data
             pupil = face_processing.pupilextraction(markers_face_conf[['pupil'+str(n+1) for n in range(6)]].values)
-
-            face['EyeLidDist'], face['EyeBlinks'] = face_processing.eyeblink(
-                markers_face,
-                eyelid_conf_thresh,
-                round(eyelid_smooth_window * FaceCam_FPS),
-                round(eyelid_interpolation_limit * FaceCam_FPS)
-            )
+            eyelid_dist = motion_processing.dlc_pointdistance2(markers_face_conf['eyelid1'], markers_face_conf['eyelid2'])
 
             # Face region motion
             facemasks, face_anchor = face_processing.faceregions(
@@ -241,8 +233,8 @@ def runMF(dlc_dir=os.getcwd(),
                     :FaceCam_FrameCount]
                 
             # NA LIMITS
-        #         if np.mean(pupil_diam_raw.isna()) > pupil_na_limit:  # if too many missing values present, fill everything with NANs
-        # pupil = np.nan
+            #         if np.mean(pupil_diam_raw.isna()) > pupil_na_limit:  # if too many missing values present, fill everything with NANs
+            # pupil = np.nan
             # SMOOTHING
             # ZSCORING
 
@@ -253,12 +245,23 @@ def runMF(dlc_dir=os.getcwd(),
 
         # pupil_saccades = pd.Series(pupil_x_smooth.diff().abs() > 1.5)
 
+            #         face['EyeLidDist'], face['EyeBlinks'] = face_processing.eyeblink(
+            #     markers_face,
+            #     eyelid_conf_thresh,
+            #     round(eyelid_smooth_window * FaceCam_FPS),
+            #     round(eyelid_interpolation_limit * FaceCam_FPS)
+            # )
 
-            face['PupilDiam'] = pupil.pupil_diam_raw
-            face['PupilX'] = pupil.pupil_x_raw
-            face['PupilY'] = pupil.pupil_y_raw
-            face['PupilMotion'] = pupil.pupil_xydist_raw
+            face = pd.DataFrame(
+                {'PupilDiam': pupil.pupil_diam_raw,
+                 'PupilX': pupil.pupil_x_raw,
+                 'PupilY': pupil.pupil_y_raw,
+                 'PupilMotion': pupil.pupil_xydist_raw,
+                 'EyeLidDist': eyelid_dist,
+                 }
+            )
 
+            # to save face ;)
             face.to_hdf(faceDLC_analysis, key='face')
 
 
