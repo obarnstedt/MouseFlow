@@ -89,7 +89,7 @@ def runDLC(vid_dir=os.getcwd(), facekey='', bodykey='', dgp=True, batch=True, ov
         bodyfiles_flipped = []
         for vid in bodyfiles:
             bodyfiles_flipped.append(flip_vid(vid, horizontal=True))
-        bodyfiles = bodyfiles_flipped    
+        bodyfiles = bodyfiles_flipped
 
     # Apply DLC/DGP Model to each face video
     for facefile in facefiles:

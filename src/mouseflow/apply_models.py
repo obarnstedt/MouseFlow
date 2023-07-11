@@ -29,15 +29,16 @@ def download_dlc():
 def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
     from deepgraphpose.models.eval import estimate_pose, plot_dgp
     from deepgraphpose.models.fitdgp_util import get_snapshot_path
-    snapshot_path, _ = get_snapshot_path('snapshot-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
+    snapshot_path, _ = get_snapshot_path('snapshot-0-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
     if vid_output > 1:
         plot_dgp(vid_file,
                 dir_out,
                 proj_cfg_file=dlc_yaml,
+                save_str=os.path.basename(dlc_yaml),
                 dgp_model_file=str(snapshot_path),
                 shuffle=1,
                 dotsize=8)
-        print("DGP face labels and labeled video saved in ", dir_out)
+        print("DGP labels and labeled video saved in ", dir_out)
     else:
         estimate_pose(proj_cfg_file=dlc_yaml,
                             dgp_model_file=str(snapshot_path),
@@ -45,9 +46,10 @@ def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
                             output_dir=dir_out,
                             shuffle=1,
                             save_pose=True,
-                            save_str='',
+                            save_str=os.path.basename(dlc_yaml),
                             new_size=None)
-    
+        print("DGP labels video saved in ", dir_out)
+
 def apply_dlc(filetype, vid_output, dlc_yaml, dir_out, vid_file):
     import deeplabcut
     deeplabcut.analyze_videos(config=dlc_yaml, videos=[vid_file], shuffle=1, videotype=filetype, destfolder=dir_out)
