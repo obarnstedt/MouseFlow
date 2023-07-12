@@ -176,43 +176,32 @@ def runMF(dlc_dir=os.getcwd(),
             FaceCam_FPS = facevidcap.get(cv2.CAP_PROP_FPS)
             FaceCam_FrameCount = int(facevidcap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-            # reading in DLC/DGP file
+            # Reading in DLC/DGP file
             markers_face = pd.read_hdf(faceDLC, mode='r')
             markers_face.columns = markers_face.columns.droplevel(0)
 
-            # filling low-confidence markers with NAN
+            # Filling low-confidence markers with NAN
             markers_face_conf = confidence_na(dgp, conf_thresh, markers_face)
 
-            # interpolating missing data up to <na_limits>
+            # Interpolating missing data up to <na_limits>
             interpolation_limits_frames = {x: int(k * FaceCam_FPS)
                                 for (x, k) in interpolation_limits_sec.items()}
             markers_face_conf[['pupil'+str(n+1) for n in range(6)]] = \
                 markers_face_conf[['pupil'+str(n+1) for n in range(6)]].interpolate(
                     method='linear', limit=interpolation_limits_frames['pupil'])
 
-            # extracting pupil and eyelid data
+            # Extracting pupil and eyelid data
             pupil = face_processing.pupilextraction(markers_face_conf[['pupil'+str(n+1) for n in range(6)]].values)
             eyelid_dist = motion_processing.dlc_pointdistance2(markers_face_conf['eyelid1'], markers_face_conf['eyelid2'])
 
-            # Face region motion
-            facemasks, face_anchor = face_processing.faceregions(
-                markers_face,
-                facefile,
-                faceregion_conf_thresh,
-                faceregion_size_whiskers,
-                faceregion_size_nose,
-                faceregion_size_mouth,
-                faceregion_size_cheek,
-                dlc_file=faceDLC
-            )
+            # Define and save face regions
+            facemasks, face_anchor = face_processing.define_faceregions(markers_face_conf, facefile, faceregions_sizes, faceDLC)
             face_anchor.to_hdf(faceDLC_analysis, key='face_anchor')
             hfg = h5py.File(faceDLC_analysis, 'a')
-            try:
-                hfg.create_dataset('facemasks', data=facemasks)
-            except:
-                pass
+            hfg.create_dataset('facemasks', data=facemasks)
             hfg.close()
 
+            # Extract motion in face regions
             if cv2.cuda.getCudaEnabledDeviceCount() == 0:
                 print("No CUDA support detected. Processing without optical flow...")
                 face_motion = face_processing.facemotion_nocuda(
