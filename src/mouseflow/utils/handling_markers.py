@@ -1,3 +1,5 @@
+import numpy as np
+
 def confidence_na(dgp, conf_thresh, markers_face):
     if not conf_thresh:
         conf_thresh = 0.5 if dgp else 0.99

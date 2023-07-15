@@ -22,12 +22,6 @@ from mouseflow.utils.generic import smooth
 plt.interactive(False)
 
 # PUPIL
-class PupilResult(NamedTuple):
-    pupil_x_raw: pd.Series
-    pupil_y_raw: pd.Series
-    pupil_xydist_raw: pd.Series
-    pupil_diam_raw: pd.Series
-
 def pupilextraction(pupil_markers_xy_confident):
     pupil_circle = np.zeros(
         shape=(len(pupil_markers_xy_confident), 2), dtype=object)
@@ -52,21 +46,11 @@ def pupilextraction(pupil_markers_xy_confident):
     # extract pupil diameter
     pupil_diam_raw = pd.Series(pupil_circle[:, 1], dtype=np.float32)
 
-    return PupilResult(pd.Series(pupil_x_raw), pd.Series(pupil_y_raw), pd.Series(pupil_xydist_raw), pd.Series(pupil_diam_raw))
+    return pd.DataFrame({'PupilX': pupil_x_raw, 
+                         'PupilY': pupil_y_raw, 
+                         'PupilMotion': pupil_xydist_raw, 
+                         'PupilDiam': pupil_diam_raw})
 
-
-# def eyeblink(dlc_face, eyelid_conf_thresh=.999, eyelid_smooth_window=25, eyelid_interpolation_limit=150):
-#     eyelid_labels_top = np.array(dlc_face.values[:, [15, 16]]) * (dlc_face.values[:, [17, 17]] > eyelid_conf_thresh)
-#     eyelid_labels_bot = np.array(dlc_face.values[:, [18, 19]]) * (dlc_face.values[:, [20, 20]] > eyelid_conf_thresh)
-#     eyelid_labels_top[eyelid_labels_top == 0] = np.nan
-#     eyelid_labels_bot[eyelid_labels_bot == 0] = np.nan
-#     eyelid_dist_raw = pd.Series(np.linalg.norm(eyelid_labels_top - eyelid_labels_bot, axis=1))
-#     eyelid_dist_interp = eyelid_dist_raw.interpolate(method='linear', limit=eyelid_interpolation_limit)  # linear interpolation, 2sec maximum
-#     eyelid_dist_smooth = pd.Series(smooth(eyelid_dist_interp, window_len=eyelid_smooth_window)).shift(periods=-int(eyelid_smooth_window/2))
-#     eyelid_dist_z = (eyelid_dist_smooth - eyelid_dist_smooth.mean()) / eyelid_dist_smooth.std(ddof=0)
-#     eyeblinks = eyelid_dist_interp < eyelid_dist_interp.median()*.75
-
-#     return eyelid_dist_z, eyeblinks
 
 # FACE REGIONS
 def define_faceregions(dlc_face, facevid, faceregions_sizes, dlc_file):
@@ -113,7 +97,7 @@ def define_faceregions(dlc_face, facevid, faceregions_sizes, dlc_file):
     centre_whiskers = np.array(cv2.minEnclosingCircle(np.array(np.vstack(([face_anchor.nosetip], [
         face_anchor.mouthtip], [face_anchor.tearduct])), dtype=np.float32))[0])
     if any([np.isnan(t) for t in centre_whiskers]):
-        mask_whiskers = np.nan
+        mask_whiskers = canvas.astype(bool)
     else:
         centre_whiskers = tuple(np.round(centre_whiskers).astype(
             int) + [int(s*scaling) for s in [-10*scaling, 70*scaling]])
@@ -127,11 +111,11 @@ def define_faceregions(dlc_face, facevid, faceregions_sizes, dlc_file):
         mask_nose = create_mask(
             centre_nose, faceregions_sizes['nose'], 70, 50, -60.0)
     else:
-        mask_nose = np.nan
+        mask_nose = canvas.astype(bool)
 
     # mouth inference ellipse
     if any([np.isnan(t) for t in face_anchor.mouthtip]):
-        mask_mouth = np.nan
+        mask_mouth = canvas.astype(bool)
     else:
         centre_mouth = tuple(np.round(
             face_anchor.mouthtip + (face_anchor.chin - face_anchor.mouthtip)/3).astype(int))
@@ -142,7 +126,7 @@ def define_faceregions(dlc_face, facevid, faceregions_sizes, dlc_file):
 
     # cheek inference ellipse
     if any([np.isnan(t) for t in face_anchor.chin]):
-        mask_cheek = np.nan
+        mask_cheek = canvas.astype(bool)
     else:
         centre_cheek = tuple(np.round(face_anchor.eyelid_bottom +
                              (face_anchor.chin - face_anchor.eyelid_bottom)/2).astype(int))
@@ -158,12 +142,8 @@ def define_faceregions(dlc_face, facevid, faceregions_sizes, dlc_file):
 
 
 # Calculating optical flow and motion energy
-def facemotion(videopath, masks, videoslice=[], total=False):
-    if total:
-        print("Calculating whole frame-to-frame differences...")
-    else:
-        print(
-            f"Calculating optical flow and motion energy for video {videopath}...")
+def facemotion(videopath, masks, videoslice=[]):
+    print(f"Calculating optical flow and motion energy for video {videopath}...")
     facemp4 = cv2.VideoCapture(videopath)
     if videoslice:
         print("Processing slice from {} to {}...".format(
@@ -174,24 +154,21 @@ def facemotion(videopath, masks, videoslice=[], total=False):
         framelength = int(facemp4.get(7))
     _, current_frame = facemp4.read()
     previous_frame = current_frame
-    if total:
-        total_frame_diff = np.zeros([1, 1])
-    else:
-        gpu_masks = []
-        maskpx = []
-        masks = [m.astype('float32') for m in masks]
-        for m in range(len(masks)):
-            gpu_mask = cv2.cuda_GpuMat()
-            gpu_mask.upload(masks[m])
-            gpu_masks.append(gpu_mask)
-            masks[m][masks[m] == 0] = np.nan
-            maskpx.append(np.nansum(masks[m]))
+    gpu_masks = []
+    maskpx = []
+    masks = [m.astype('float32') for m in masks]
+    for m in range(len(masks)):
+        gpu_mask = cv2.cuda_GpuMat()
+        gpu_mask.upload(masks[m])
+        gpu_masks.append(gpu_mask)
+        masks[m][masks[m] == 0] = np.nan
+        maskpx.append(np.nansum(masks[m]))
 
-        frame_diff = np.empty((framelength, 4))
-        frame_diffmag = np.empty((framelength, 4))
-        frame_diffang = np.empty((framelength, 4))
-        gpu_flow = cv2.cuda_FarnebackOpticalFlow.create(numLevels=5, pyrScale=.5, fastPyramids=True, winSize=25,
-                                                        numIters=3, polyN=5, polySigma=1.2, flags=0)
+    frame_diff = np.empty((framelength, 4))
+    frame_diffmag = np.empty((framelength, 4))
+    frame_diffang = np.empty((framelength, 4))
+    gpu_flow = cv2.cuda_FarnebackOpticalFlow.create(numLevels=5, pyrScale=.5, fastPyramids=True, winSize=25,
+                                                    numIters=3, polyN=5, polySigma=1.2, flags=0)
 
     i = 0
     with tqdm(total=framelength) as pbar:
@@ -205,31 +182,24 @@ def facemotion(videopath, masks, videoslice=[], total=False):
                 previous_frame, cv2.COLOR_BGR2GRAY)
             gpu_previous = cv2.cuda_GpuMat()
             gpu_previous.upload(previous_frame_gray)
-
-            if total:
-                total_frame_diff_current = (
-                    np.sum(cv2.absdiff(current_frame_gray, previous_frame_gray)))
-                total_frame_diff = np.vstack(
-                    (total_frame_diff, total_frame_diff_current))
-            else:
-                flow = gpu_flow.calc(gpu_frame, gpu_previous, None)
-                gpu_flow_x = cv2.cuda_GpuMat(flow.size(), cv2.CV_32FC1)
-                gpu_flow_y = cv2.cuda_GpuMat(flow.size(), cv2.CV_32FC1)
-                cv2.cuda.split(flow, [gpu_flow_x, gpu_flow_y])
-                gpu_mag, gpu_ang = cv2.cuda.cartToPolar(
-                    gpu_flow_x, gpu_flow_y, angleInDegrees=True)
-                gpu_frame32 = gpu_frame.convertTo(cv2.CV_32FC1, gpu_frame)
-                gpu_previous32 = gpu_previous.convertTo(
-                    cv2.CV_32FC1, gpu_previous)
-                for index, (mask, gpu_mask, px) in enumerate(zip(masks, gpu_masks, maskpx)):
-                    mag_mask = cv2.cuda.multiply(gpu_mag, gpu_mask)
-                    ang_mask = cv2.cuda.multiply(gpu_ang, gpu_mask)
-                    frame_mask = cv2.cuda.multiply(gpu_frame32, gpu_mask)
-                    previous_mask = cv2.cuda.multiply(gpu_previous32, gpu_mask)
-                    frame_diffmag[i, index] = cv2.cuda.absSum(mag_mask)[0] / px
-                    frame_diffang[i, index] = cv2.cuda.absSum(ang_mask)[0] / px
-                    frame_diff[i, index] = cv2.cuda.absSum(
-                        cv2.cuda.absdiff(frame_mask, previous_mask))[0] / px
+            flow = gpu_flow.calc(gpu_frame, gpu_previous, None)
+            gpu_flow_x = cv2.cuda_GpuMat(flow.size(), cv2.CV_32FC1)
+            gpu_flow_y = cv2.cuda_GpuMat(flow.size(), cv2.CV_32FC1)
+            cv2.cuda.split(flow, [gpu_flow_x, gpu_flow_y])
+            gpu_mag, gpu_ang = cv2.cuda.cartToPolar(
+                gpu_flow_x, gpu_flow_y, angleInDegrees=True)
+            gpu_frame32 = gpu_frame.convertTo(cv2.CV_32FC1, gpu_frame)
+            gpu_previous32 = gpu_previous.convertTo(
+                cv2.CV_32FC1, gpu_previous)
+            for index, (mask, gpu_mask, px) in enumerate(zip(masks, gpu_masks, maskpx)):
+                mag_mask = cv2.cuda.multiply(gpu_mag, gpu_mask)
+                ang_mask = cv2.cuda.multiply(gpu_ang, gpu_mask)
+                frame_mask = cv2.cuda.multiply(gpu_frame32, gpu_mask)
+                previous_mask = cv2.cuda.multiply(gpu_previous32, gpu_mask)
+                frame_diffmag[i, index] = cv2.cuda.absSum(mag_mask)[0] / px
+                frame_diffang[i, index] = cv2.cuda.absSum(ang_mask)[0] / px
+                frame_diff[i, index] = cv2.cuda.absSum(
+                    cv2.cuda.absdiff(frame_mask, previous_mask))[0] / px
             pbar.update(1)
             i += 1
             previous_frame = current_frame.copy()
@@ -238,22 +208,16 @@ def facemotion(videopath, masks, videoslice=[], total=False):
                 break
     facemp4.release()
 
-    if total:
-        return total_frame_diff
-    else:
-        motion = pd.DataFrame(np.hstack([frame_diff, frame_diffmag, frame_diffang]),
-                              columns=['MotionEnergy_Nose', 'MotionEnergy_Whiskerpad', 'MotionEnergy_Mouth', 'MotionEnergy_Cheek',
-                                       'OFmag_Nose', 'OFmag_Whiskerpad', 'OFmag_Mouth', 'OFmag_Cheek',
-                                       'OFang_Nose', 'OFang_Whiskerpad', 'OFang_Mouth', 'OFang_Cheek'])
-        return motion
+    motion = pd.DataFrame(np.hstack([frame_diff, frame_diffmag, frame_diffang]),
+                            columns=['MotionEnergy_Nose', 'MotionEnergy_Whiskerpad', 'MotionEnergy_Mouth', 'MotionEnergy_Cheek',
+                                    'OFmag_Nose', 'OFmag_Whiskerpad', 'OFmag_Mouth', 'OFmag_Cheek',
+                                    'OFang_Nose', 'OFang_Whiskerpad', 'OFang_Mouth', 'OFang_Cheek'])
+    return motion
 
 
 # Calculating motion energy
-def facemotion_nocuda(videopath, masks, videoslice=[], total=False):
-    if total:
-        print("Calculating whole frame-to-frame differences...")
-    else:
-        print(f"Calculating motion energy for video {videopath}...")
+def facemotion_nocuda(videopath, masks, videoslice=[]):
+    print(f"Calculating motion energy for video {videopath}...")
     facemp4 = cv2.VideoCapture(videopath)
     if videoslice:
         print("Processing slice from {} to {}...".format(
