@@ -81,3 +81,38 @@ def smooth(x, window_len=11, window='hanning'):
         w = eval('np.'+window+'(window_len)')
     y = np.convolve(w/w.sum(), s, mode='valid')
     return y
+
+
+def process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, face_raw):
+    face_raw.iloc[:, (face_raw.isnull().mean()>na_limit).values] = np.nan  
+
+    # Interpolate missing values
+    face_interp = face_raw.copy()
+    face_interp[['PupilX', 'PupilY', 'PupilMotion', 'PupilDiam']] = \
+            face_interp[['PupilX', 'PupilY', 'PupilMotion', 'PupilDiam']].interpolate(
+                method='linear', limit=interpolation_limits_frames['pupil'])
+
+    # Smoothen data
+    smoothing_windows_frames = {x: int(k * FaceCam_FPS)
+                                for (x, k) in smoothing_windows_sec.items()}
+    face_smooth = face_interp.copy()
+    face_smooth['PupilDiam'] = face_smooth['PupilDiam'].rolling(
+            window=smoothing_windows_frames['PupilDiam'], center=True).mean()
+    face_smooth[['PupilX', 'PupilY', 'PupilMotion']] = \
+            face_smooth[['PupilX', 'PupilY', 'PupilMotion']].rolling(
+            window=smoothing_windows_frames['PupilMotion'], center=True).mean()
+    face_smooth.loc[:, face_smooth.columns.str.startswith('MotionEnergy')] = \
+            face_smooth.loc[:, face_smooth.columns.str.startswith('MotionEnergy')].rolling(
+            window=smoothing_windows_frames['MotionEnergy'], center=True).mean()
+
+    # Z-scoring data
+    face_zscore = face_smooth.apply(lambda a: (a - a.mean())/a.std(ddof=0))
+
+    # adding binary data
+    face_zscore['Saccades'] = pd.Series(face_smooth['PupilX'].diff().abs() > 1.5).astype(int)
+    face_zscore['EyeBlink'] = pd.Series(face_interp['EyeLidDist'] < face_interp['EyeLidDist'].median()*.75).astype(int)
+
+    # Concatenating all data types into multi-level dataframe
+    face = pd.concat({'raw': face_raw, 'interpolated': face_interp, 'smooth': face_smooth, 'zscore': face_zscore}, names=['Data_type'], axis=1)
+
+    return face

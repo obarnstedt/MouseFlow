@@ -16,21 +16,22 @@ from scipy.stats import zscore
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow import apply_models
-from mouseflow.utils import config_tensorflow, is_installed, motion_processing, confidence_na, smooth
-from mouseflow.utils.preprocess_video import flip_vid
+from mouseflow.utils import config_tensorflow, is_installed, motion_processing, confidence_na, process_raw_data
+from mouseflow.utils.preprocess_video import flip_vid, crop_vid
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
 
 
 def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=True, batch='all', overwrite=False,
-           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False,
+           filetype='.mp4', vid_output=1000, body_facing='right', face_facing='left', face_crop=[], body_crop=[],
            facemodel_name='MouseFace-Barnstedt-2019-08-21', bodymodel_name='MouseBody-Barnstedt-2019-09-09'):
     # vid_dir defines directory to detect face/body videos, standard: current working directory
     # facekey defines unique string that is contained in all face videos. If None, no face videos will be considered.
     # bodykey defines unique string that is contained in all body videos. If None, no body videos will be considered.
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
     # batch defines how many videos to analyse ('all' for all, integer for the first n videos)
+    # face/body_crop allows initial cropping of video in the form [x_start, x_end, y_start, y_end]
 
     #  To evade cuDNN error message:
     config_tensorflow(log_level='ERROR', allow_growth=True)
@@ -67,18 +68,29 @@ def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=
         facefiles = glob.glob(os.path.join(vid_dir, '*'+facekey+'*'+filetype))
         bodyfiles = glob.glob(os.path.join(vid_dir, '*'+bodykey+'*'+filetype))
 
-    # sort out already flipped videos
-    facefiles = [f for f in facefiles if '_flipped.*' not in f]
-    bodyfiles = [b for b in bodyfiles if '_flipped.*' not in b]
+    # cropping videos
+    facefiles = [f for f in facefiles if '_cropped.*' not in f]  # sort out already cropped videos
+    bodyfiles = [b for b in bodyfiles if '_cropped.*' not in b]  # sort out already cropped videos
+    if face_crop:
+        facefiles_cropped = []
+        for vid in facefiles:
+            facefiles_cropped.append(crop_vid(vid, face_crop))
+        facefiles = facefiles_cropped
+    if body_crop:
+        bodyfiles_cropped = []
+        for vid in bodyfiles:
+            bodyfiles_cropped.append(crop_vid(vid, body_crop))
+        bodyfiles = bodyfiles_cropped
 
-    # TODO: instead of faceflip, make face_direction='right'/'left'
     # flipping videos
-    if faceflip:
+    facefiles = [f for f in facefiles if '_flipped.*' not in f]  # sort out already flipped videos
+    bodyfiles = [b for b in bodyfiles if '_flipped.*' not in b]  # sort out already flipped videos
+    if face_facing != 'left':
         facefiles_flipped = []
         for vid in facefiles:
             facefiles_flipped.append(flip_vid(vid, horizontal=True))
         facefiles = facefiles_flipped
-    if bodyflip:
+    if body_facing != 'right':
         bodyfiles_flipped = []
         for vid in bodyfiles:
             bodyfiles_flipped.append(flip_vid(vid, horizontal=True))
@@ -243,6 +255,7 @@ def runMF(dlc_dir=os.getcwd(),
         markers_body = pd.read_hdf(bodyDLC, mode='r')
         markers_body.columns = markers_body.columns.droplevel(0)
 
+        # Get body video info
         bodyfile = glob.glob(os.path.join(os.path.dirname(
             dlc_dir), os.path.basename(bodyDLC).split('DLC')[0] + '*'))[0]
         BodyCam_FPS = cv2.VideoCapture(bodyfile).get(cv2.CAP_PROP_FPS)
@@ -303,38 +316,3 @@ def runMF(dlc_dir=os.getcwd(),
         })
         body = body[:len(markers_body)]
         body.to_hdf(bodyDLC, key='body')
-
-
-def process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, face_raw):
-    face_raw.iloc[:, (face_raw.isnull().mean()>na_limit).values] = np.nan  
-
-    # Interpolate missing values
-    face_interp = face_raw.copy()
-    face_interp[['PupilX', 'PupilY', 'PupilMotion', 'PupilDiam']] = \
-            face_interp[['PupilX', 'PupilY', 'PupilMotion', 'PupilDiam']].interpolate(
-                method='linear', limit=interpolation_limits_frames['pupil'])
-
-    # Smoothen data
-    smoothing_windows_frames = {x: int(k * FaceCam_FPS)
-                                for (x, k) in smoothing_windows_sec.items()}
-    face_smooth = face_interp.copy()
-    face_smooth['PupilDiam'] = face_smooth['PupilDiam'].rolling(
-            window=smoothing_windows_frames['PupilDiam'], center=True).mean()
-    face_smooth[['PupilX', 'PupilY', 'PupilMotion']] = \
-            face_smooth[['PupilX', 'PupilY', 'PupilMotion']].rolling(
-            window=smoothing_windows_frames['PupilMotion'], center=True).mean()
-    face_smooth.loc[:, face_smooth.columns.str.startswith('MotionEnergy')] = \
-            face_smooth.loc[:, face_smooth.columns.str.startswith('MotionEnergy')].rolling(
-            window=smoothing_windows_frames['MotionEnergy'], center=True).mean()
-
-    # Z-scoring data
-    face_zscore = face_smooth.apply(lambda a: (a - a.mean())/a.std(ddof=0))
-
-    # adding binary data
-    face_zscore['Saccades'] = pd.Series(face_smooth['PupilX'].diff().abs() > 1.5).astype(int)
-    face_zscore['EyeBlink'] = pd.Series(face_interp['EyeLidDist'] < face_interp['EyeLidDist'].median()*.75).astype(int)
-
-    # Concatenating all data types into multi-level dataframe
-    face = pd.concat({'raw': face_raw, 'interpolated': face_interp, 'smooth': face_smooth, 'zscore': face_zscore}, names=['Data_type'], axis=1)
-
-    return face
