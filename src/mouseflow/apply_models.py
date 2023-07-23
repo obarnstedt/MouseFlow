@@ -22,7 +22,7 @@ def download_models(models_dir, facemodel_name, bodymodel_name):
 def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
     from deepgraphpose.models.eval import estimate_pose, plot_dgp
     from deepgraphpose.models.fitdgp_util import get_snapshot_path
-    snapshot_path, _ = get_snapshot_path('snapshot-0-0-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
+    snapshot_path, _ = get_snapshot_path('snapshot-0-step2-final--0', os.path.dirname(dlc_yaml), shuffle=1)
     if vid_output > 1:
         plot_dgp(vid_file,
                 dir_out,
@@ -30,7 +30,8 @@ def apply_dgp(dlc_yaml, dir_out, vid_file, vid_output):
                 save_str=os.path.basename(dlc_yaml),
                 dgp_model_file=str(snapshot_path),
                 shuffle=1,
-                dotsize=8)
+                dotsize=8,
+                mask_threshold=0)
         print("DGP labels and labeled video saved in ", dir_out)
     else:
         estimate_pose(proj_cfg_file=dlc_yaml,
