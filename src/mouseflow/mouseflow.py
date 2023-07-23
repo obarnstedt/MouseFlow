@@ -16,21 +16,22 @@ from scipy.stats import zscore
 import mouseflow.body_processing as body_processing
 import mouseflow.face_processing as face_processing
 from mouseflow import apply_models
-from mouseflow.utils import config_tensorflow, is_installed, motion_processing, confidence_na
-from mouseflow.utils.preprocess_video import flip_vid
+from mouseflow.utils import config_tensorflow, is_installed, motion_processing, confidence_na, process_raw_data
+from mouseflow.utils.preprocess_video import flip_vid, crop_vid
 
 matplotlib.use('TKAgg')
 plt.interactive(False)
 
 
 def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=True, batch='all', overwrite=False,
-           filetype='.mp4', vid_output=1000, bodyflip=False, faceflip=False,
+           filetype='.mp4', vid_output=1000, body_facing='right', face_facing='left', face_crop=[], body_crop=[],
            facemodel_name='MouseFace-Barnstedt-2019-08-21', bodymodel_name='MouseBody-Barnstedt-2019-09-09'):
     # vid_dir defines directory to detect face/body videos, standard: current working directory
     # facekey defines unique string that is contained in all face videos. If None, no face videos will be considered.
     # bodykey defines unique string that is contained in all body videos. If None, no body videos will be considered.
     # dgp defines whether to use DeepGraphPose (if True), otherwise resorts to DLC
     # batch defines how many videos to analyse ('all' for all, integer for the first n videos)
+    # face/body_crop allows initial cropping of video in the form [x_start, x_end, y_start, y_end]
 
     #  To evade cuDNN error message:
     config_tensorflow(log_level='ERROR', allow_growth=True)
@@ -67,17 +68,29 @@ def runDLC(models_dir, vid_dir=os.getcwd(), facekey='face', bodykey='body', dgp=
         facefiles = glob.glob(os.path.join(vid_dir, '*'+facekey+'*'+filetype))
         bodyfiles = glob.glob(os.path.join(vid_dir, '*'+bodykey+'*'+filetype))
 
-    # sort out already flipped videos
-    facefiles = [f for f in facefiles if '_flipped.*' not in f]
-    bodyfiles = [b for b in bodyfiles if '_flipped.*' not in b]
+    # cropping videos
+    facefiles = [f for f in facefiles if '_cropped.*' not in f]  # sort out already cropped videos
+    bodyfiles = [b for b in bodyfiles if '_cropped.*' not in b]  # sort out already cropped videos
+    if face_crop:
+        facefiles_cropped = []
+        for vid in facefiles:
+            facefiles_cropped.append(crop_vid(vid, face_crop))
+        facefiles = facefiles_cropped
+    if body_crop:
+        bodyfiles_cropped = []
+        for vid in bodyfiles:
+            bodyfiles_cropped.append(crop_vid(vid, body_crop))
+        bodyfiles = bodyfiles_cropped
 
     # flipping videos
-    if faceflip:
+    facefiles = [f for f in facefiles if '_flipped.*' not in f]  # sort out already flipped videos
+    bodyfiles = [b for b in bodyfiles if '_flipped.*' not in b]  # sort out already flipped videos
+    if face_facing != 'left':
         facefiles_flipped = []
         for vid in facefiles:
             facefiles_flipped.append(flip_vid(vid, horizontal=True))
         facefiles = facefiles_flipped
-    if bodyflip:
+    if body_facing != 'right':
         bodyfiles_flipped = []
         for vid in bodyfiles:
             bodyfiles_flipped.append(flip_vid(vid, horizontal=True))
@@ -135,15 +148,21 @@ def runMF(dlc_dir=os.getcwd(),
           interpolation_limits_sec={
               'pupil': 2,
               'eyelid': 1,
-              },
+          },
+          smoothing_windows_sec={
+              'PupilDiam': 1,
+              'PupilMotion': 0.25,
+              'eyelid': 0.1,
+              'MotionEnergy': 0.25,
+          },
           na_limit=0.25,
           faceregions_sizes={
-              'whiskers': 1,
-              'nose': 1,
-              'mouth': 1,
-              'cheek': 1,
-              }
-          ):
+                'whiskers': 1,
+                'nose': 1,
+                'mouth': 1,
+                'cheek': 1,
+          }
+    ):
     # dir defines directory to detect face/body videos, standard: current working directory
     # facekey defines unique string that is contained in all face videos. If none, no face videos will be considered.
     # bodykey defines unique string that is contained in all face videos. If none, no face videos will be considered.
@@ -151,7 +170,7 @@ def runMF(dlc_dir=os.getcwd(),
     # batch defines how many videos to analyse (True for all, integer for the first n videos)
     # of_type sets the optical flow algorithm
 
-    # TODO: go through DGP files if requested
+    # TODO: go through DGP files if requested, required beforehand: common naming convention!
     facefiles = glob.glob(os.path.join(dlc_dir, '*MouseFace*1030000.h5'))
     bodyfiles = glob.glob(os.path.join(dlc_dir, '*MouseBody*1030000.h5'))
 
@@ -160,121 +179,80 @@ def runMF(dlc_dir=os.getcwd(),
             f'No marker files found in directory {dlc_dir}. Check directory.')
     else:
         print(
-            f'Found the following marker files: \n {[str(f) for f in facefiles]} \n {[str(f) for f in bodyfiles]}')
+            f'Found the following marker files: \n {[str(f) for f in facefiles]} \n \
+            {[str(f) for f in bodyfiles]}')
 
+    #  FACE ANALYSIS
     for faceDLC in facefiles:
+        if os.path.exists(mf_file) and not overwrite:
+            print(mf_file + ' data already analysed. Skipping ahead...')
+            continue
 
-        #  FACE ANALYSIS
-        if os.path.exists(faceDLC_analysis) and not overwrite:
-            print(faceDLC_analysis + ' data already analysed. Skipping ahead...')
+        print('Processing DLC data from '+faceDLC)
+        mf_file = faceDLC[:-3] + '_mouseflow.h5'
+        facefile = glob.glob(os.path.join(os.path.dirname(
+            dlc_dir), os.path.basename(faceDLC).split('DLC')[0] + '*'))[0]
+        facevidcap = cv2.VideoCapture(facefile)
+        FaceCam_FPS = facevidcap.get(cv2.CAP_PROP_FPS)
+
+        # Reading in DLC/DGP file
+        markers_face = pd.read_hdf(faceDLC, mode='r')
+        markers_face.columns = markers_face.columns.droplevel(0)
+
+        # Filling low-confidence markers with NAN
+        markers_face_conf = confidence_na(dgp, conf_thresh, markers_face)
+
+        # Interpolating missing data up to <na_limits>
+        interpolation_limits_frames = {x: int(k * FaceCam_FPS)
+                                       for (x, k) in interpolation_limits_sec.items()}
+        markers_face_conf[['pupil'+str(n+1) for n in range(6)]] = \
+            markers_face_conf[['pupil'+str(n+1) for n in range(6)]].interpolate(
+                method='linear', limit=interpolation_limits_frames['pupil'])
+
+        # Extracting pupil and eyelid data
+        pupil_raw = face_processing.pupilextraction(
+            markers_face_conf[['pupil'+str(n+1) for n in range(6)]].values)
+        eyelid_dist_raw = pd.Series(motion_processing.dlc_pointdistance2(
+            markers_face_conf['eyelid1'], markers_face_conf['eyelid2']), name='EyeLidDist')
+
+        # Define and save face regions
+        facemasks, face_anchor = face_processing.define_faceregions(
+            markers_face_conf, facefile, faceregions_sizes, faceDLC)
+        face_anchor.to_hdf(mf_file, key='face_anchor')
+        hfg = h5py.File(mf_file, 'a')
+        hfg.create_dataset('facemasks', data=facemasks)
+        hfg.close()
+
+        # Extract motion in face regions
+        if cv2.cuda.getCudaEnabledDeviceCount() == 0:
+            print("No CUDA support detected. Processing without optical flow...")
+            face_motion = face_processing.facemotion_nocuda(
+                facefile, facemasks)
+            face_raw = pd.concat([pupil_raw, eyelid_dist_raw, face_motion], axis=1)
         else:
-            print('Processing DLC data from '+faceDLC)
-            faceDLC_analysis = faceDLC[:-3] + '_mouseflow.h5'
-            facefile = glob.glob(os.path.join(os.path.dirname(
-                dlc_dir), os.path.basename(faceDLC).split('DLC')[0] + '*'))[0]
-            facevidcap = cv2.VideoCapture(facefile)
-            FaceCam_FPS = facevidcap.get(cv2.CAP_PROP_FPS)
-            FaceCam_FrameCount = int(facevidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+            face_motion = face_processing.facemotion(facefile, facemasks)
+            whisk_freq = motion_processing.freq_analysis2(
+                face_motion['OFang_Whiskerpad'], FaceCam_FPS, rollwin=FaceCam_FPS, min_periods=int(FaceCam_FPS*.67))
+            sniff_freq = motion_processing.freq_analysis2(
+                face_motion['OFang_Nose'],       FaceCam_FPS, rollwin=FaceCam_FPS, min_periods=int(FaceCam_FPS*.67))
+            chewenv, chew = motion_processing.hilbert_peaks(
+                face_motion['OFang_Mouth'],    FaceCam_FPS)
+            face_freq = pd.DataFrame(
+                {'Whisking_freq': whisk_freq, 'Sniff_freq': sniff_freq, 'Chewing_Envelope': chewenv, 'Chew': chew})
+            face_raw = pd.concat([pupil_raw, eyelid_dist_raw, face_motion, face_freq], axis=1)
 
-            # reading in DLC/DGP file
-            markers_face = pd.read_hdf(faceDLC, mode='r')
-            markers_face.columns = markers_face.columns.droplevel(0)
+        # further process raw data and save
+        face = process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, face_raw)
+        face.to_hdf(mf_file, key='face')
 
-            # filling low-confidence markers with NAN
-            markers_face_conf = confidence_na(dgp, conf_thresh, markers_face)
-
-            # interpolating missing data up to <na_limits>
-            interpolation_limits_frames = {x: int(k * FaceCam_FPS)
-                                for (x, k) in interpolation_limits_sec.items()}
-            markers_face_conf[['pupil'+str(n+1) for n in range(6)]] = \
-                markers_face_conf[['pupil'+str(n+1) for n in range(6)]].interpolate(
-                    method='linear', limit=interpolation_limits_frames['pupil'])
-
-            # extracting pupil and eyelid data
-            pupil = face_processing.pupilextraction(markers_face_conf[['pupil'+str(n+1) for n in range(6)]].values)
-            eyelid_dist = motion_processing.dlc_pointdistance2(markers_face_conf['eyelid1'], markers_face_conf['eyelid2'])
-
-            # Face region motion
-            facemasks, face_anchor = face_processing.faceregions(
-                markers_face,
-                facefile,
-                faceregion_conf_thresh,
-                faceregion_size_whiskers,
-                faceregion_size_nose,
-                faceregion_size_mouth,
-                faceregion_size_cheek,
-                dlc_file=faceDLC
-            )
-            face_anchor.to_hdf(faceDLC_analysis, key='face_anchor')
-            hfg = h5py.File(faceDLC_analysis, 'a')
-            try:
-                hfg.create_dataset('facemasks', data=facemasks)
-            except:
-                pass
-            hfg.close()
-
-            if cv2.cuda.getCudaEnabledDeviceCount() == 0:
-                print("No CUDA support detected. Processing without optical flow...")
-                face_motion = face_processing.facemotion_nocuda(
-                    facefile, facemasks)
-                face = pd.concat([face, face_motion], axis=1)[
-                    :FaceCam_FrameCount]
-            else:
-                face_motion = face_processing.facemotion(facefile, facemasks)
-                whisk_freq = motion_processing.freq_analysis2(
-                    face_motion['OFang_Whiskerpad'], FaceCam_FPS, rollwin=FaceCam_FPS, min_periods=int(FaceCam_FPS*.67))
-                sniff_freq = motion_processing.freq_analysis2(
-                    face_motion['OFang_Nose'],       FaceCam_FPS, rollwin=FaceCam_FPS, min_periods=int(FaceCam_FPS*.67))
-                chewenv, chew = motion_processing.hilbert_peaks(
-                    face_motion['OFang_Mouth'],    FaceCam_FPS)
-                face_freq = pd.DataFrame(
-                    {'Whisking_freq': whisk_freq, 'Sniff_freq': sniff_freq, 'Chewing_Envelope': chewenv, 'Chew': chew})
-                face = pd.concat([face, face_motion, face_freq], axis=1)[
-                    :FaceCam_FrameCount]
-                
-            # NA LIMITS
-            #         if np.mean(pupil_diam_raw.isna()) > pupil_na_limit:  # if too many missing values present, fill everything with NANs
-            # pupil = np.nan
-            # SMOOTHING
-            # ZSCORING
-
-                # pupil_xydist_interp = pupil_xydist_raw.interpolate(method='linear', limit=pupil_interpolation_limit)  # linear interpolation
-    # pupil_xydist_smooth = pd.Series(smooth(pupil_xydist_interp, window_len=round(pupil_smooth_window/10))).shift(
-    #     periods=-int(pupil_smooth_window/10 / 2))
-    # pupil_xydist_z = ((pupil_xydist_interp - pupil_xydist_interp.mean()) / pupil_xydist_interp.std(ddof=0))[:len(pupil_x_raw)]
-
-        # pupil_saccades = pd.Series(pupil_x_smooth.diff().abs() > 1.5)
-
-            #         face['EyeLidDist'], face['EyeBlinks'] = face_processing.eyeblink(
-            #     markers_face,
-            #     eyelid_conf_thresh,
-            #     round(eyelid_smooth_window * FaceCam_FPS),
-            #     round(eyelid_interpolation_limit * FaceCam_FPS)
-            # )
-
-            face = pd.DataFrame(
-                {'PupilDiam': pupil.pupil_diam_raw,
-                 'PupilX': pupil.pupil_x_raw,
-                 'PupilY': pupil.pupil_y_raw,
-                 'PupilMotion': pupil.pupil_xydist_raw,
-                 'EyeLidDist': eyelid_dist,
-                 }
-            )
-
-            # to save face ;)
-            face.to_hdf(faceDLC_analysis, key='face')
-
-
-
-
+    #  BODY ANALYSIS
     for bodyDLC in bodyfiles:
-
-        #  BODY ANALYSIS
 
         # Load Body Data
         markers_body = pd.read_hdf(bodyDLC, mode='r')
         markers_body.columns = markers_body.columns.droplevel(0)
 
+        # Get body video info
         bodyfile = glob.glob(os.path.join(os.path.dirname(
             dlc_dir), os.path.basename(bodyDLC).split('DLC')[0] + '*'))[0]
         BodyCam_FPS = cv2.VideoCapture(bodyfile).get(cv2.CAP_PROP_FPS)
@@ -316,7 +294,7 @@ def runMF(dlc_dir=os.getcwd(),
         cylinder_motion = body_processing.cylinder_motion(
             bodyfile, cylinder_mask)
 
-        body = pd.DataFrame({
+        body_raw = pd.DataFrame({
             'PointMotion_FrontPaw': motion_frontpaw.raw_distance,
             'AngleMotion_FrontPaw': motion_frontpaw.angles,
             'PointMotion_Mouth': motion_mouth.raw_distance,
@@ -333,5 +311,7 @@ def runMF(dlc_dir=os.getcwd(),
             'Cylinder_Motion': cylinder_motion.raw,
             'Stride_Frequency': stride_freq,
         })
-        body = body[:len(markers_body)]
-        body.to_hdf(bodyDLC, key='body')
+
+        # further process raw data and save
+        body = process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, body_raw)
+        body.to_hdf(mf_file, key='body')

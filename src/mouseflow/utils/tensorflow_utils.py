@@ -8,7 +8,7 @@ def config_tensorflow(log_level: Literal['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATA
     import tensorflow as tf
 
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
+    config.gpu_options.allow_growth = allow_growth
     sess = tf.Session(config=config)
 
     level = getattr(tf.logging, log_level)  # gets a variable from a string from a module (in this case, using "ERROR" would get you tf.logging.ERROR)
