@@ -170,7 +170,7 @@ def runMF(dlc_dir=os.getcwd(),
     # batch defines how many videos to analyse (True for all, integer for the first n videos)
     # of_type sets the optical flow algorithm
 
-    # TODO: go through DGP files if requested
+    # TODO: go through DGP files if requested, required beforehand: common naming convention!
     facefiles = glob.glob(os.path.join(dlc_dir, '*MouseFace*1030000.h5'))
     bodyfiles = glob.glob(os.path.join(dlc_dir, '*MouseBody*1030000.h5'))
 
@@ -241,9 +241,6 @@ def runMF(dlc_dir=os.getcwd(),
                 {'Whisking_freq': whisk_freq, 'Sniff_freq': sniff_freq, 'Chewing_Envelope': chewenv, 'Chew': chew})
             face_raw = pd.concat([pupil_raw, eyelid_dist_raw, face_motion, face_freq], axis=1)
 
-        # save raw face data
-        face_raw.to_hdf(mf_file, key='face_raw')
-
         # further process raw data and save
         face = process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, face_raw)
         face.to_hdf(mf_file, key='face')
@@ -297,7 +294,7 @@ def runMF(dlc_dir=os.getcwd(),
         cylinder_motion = body_processing.cylinder_motion(
             bodyfile, cylinder_mask)
 
-        body = pd.DataFrame({
+        body_raw = pd.DataFrame({
             'PointMotion_FrontPaw': motion_frontpaw.raw_distance,
             'AngleMotion_FrontPaw': motion_frontpaw.angles,
             'PointMotion_Mouth': motion_mouth.raw_distance,
@@ -314,5 +311,7 @@ def runMF(dlc_dir=os.getcwd(),
             'Cylinder_Motion': cylinder_motion.raw,
             'Stride_Frequency': stride_freq,
         })
-        body = body[:len(markers_body)]
-        body.to_hdf(bodyDLC, key='body')
+
+        # further process raw data and save
+        body = process_raw_data(smoothing_windows_sec, na_limit, FaceCam_FPS, interpolation_limits_frames, body_raw)
+        body.to_hdf(mf_file, key='body')
