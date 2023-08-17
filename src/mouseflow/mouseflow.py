@@ -205,8 +205,8 @@ def runMF(dlc_dir=os.getcwd(),
         # Interpolating missing data up to <na_limits>
         interpolation_limits_frames = {x: int(k * FaceCam_FPS)
                                        for (x, k) in interpolation_limits_sec.items()}
-        markers_face_conf[['pupil'+str(n+1) for n in range(6)]] = \
-            markers_face_conf[['pupil'+str(n+1) for n in range(6)]].interpolate(
+        markers_face_conf.loc[:, ['pupil'+str(n+1) for n in range(6)]] = \
+            markers_face_conf.loc[:, ['pupil'+str(n+1) for n in range(6)]].interpolate(
                 method='linear', limit=interpolation_limits_frames['pupil'])
 
         # Extracting pupil and eyelid data
