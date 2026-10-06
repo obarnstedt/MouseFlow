@@ -19,7 +19,7 @@ A Python toolbox to quantify facial and bodily movement in headfixed mice.
 - (Optional:) Install Deepgraphpose (DLC2 compatible) from https://github.com/lnguyen/deepgraphpose/tree/upgrade using pip install
 - To install MouseFlow:
 ```
-pip install git+https://github.com/obarnstedt/MouseFlow
+pip install git+https://github.com/BarnstedtLab/MouseFlow
 ```
 
 ## Workflow
