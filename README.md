@@ -1,3 +1,11 @@
+> **MouseFlow has moved**
+>
+> The actively maintained repository is:
+> **[BarnstedtLab/MouseFlow](https://github.com/BarnstedtLab/MouseFlow)**
+>
+> Please use that repository for installation, updates, issues and pull requests.
+> This repository is retained as a historical archive and is no longer maintained.
+
 # MouseFlow
 
 ## Description
